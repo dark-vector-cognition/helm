@@ -272,8 +272,8 @@ const api = {
   vaultReindex: (): Promise<VaultReindexResult> =>
     ipcRenderer.invoke(IPC_CHANNELS.VAULT_REINDEX),
 
-  vaultPushNote: (title: string, content: string, folder?: string): Promise<VaultPushResult> =>
-    ipcRenderer.invoke(IPC_CHANNELS.VAULT_PUSH_NOTE, title, content, folder),
+  vaultPushNote: (title: string, content: string, folder?: string, tags?: string[]): Promise<VaultPushResult> =>
+    ipcRenderer.invoke(IPC_CHANNELS.VAULT_PUSH_NOTE, title, content, folder, tags),
 
   vaultPullSync: (): Promise<{ success: boolean; files_updated: number; error?: string }> =>
     ipcRenderer.invoke(IPC_CHANNELS.VAULT_PULL_SYNC),

@@ -13,6 +13,7 @@ export function VaultPushModal(): JSX.Element {
   const setPushModalOpen = useVaultStore((s) => s.setPushModalOpen)
   const pushNote = useVaultStore((s) => s.pushNote)
   const pushing = useVaultStore((s) => s.pushing)
+  const operation = useVaultStore((s) => s.lastOperation)
 
   const [title, setTitle] = useState('')
   const [folder, setFolder] = useState('Inbox')
@@ -139,6 +140,9 @@ export function VaultPushModal(): JSX.Element {
           </label>
         </div>
 
+        {operation?.type === 'push' && !operation.success && (
+          <p role="alert" className="vault-modal-error">{operation.message}</p>
+        )}
         <div className="vault-modal-footer">
           <button
             type="button"

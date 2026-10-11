@@ -1,7 +1,7 @@
 import { execFile } from 'child_process'
 import { access, mkdir, writeFile } from 'fs/promises'
 import { homedir } from 'os'
-import { join } from 'path'
+import { join, resolve, sep } from 'path'
 import type {
   HelmConfig,
   VaultChunk,
@@ -246,11 +246,12 @@ export class VaultClient {
       })
 
       if (!response.ok) {
-        return { results: [], query, result_count: 0 }
+        return { results: [], query, result_count: 0, error: `Vault search failed (${response.status})` }
       }
 
-      const payload = (await response.json().catch(() => ({}))) as Partial<VaultSearchResponse>
-      const results = Array.isArray(payload.results) ? payload.results : []
+      const payload = (await response.json()) as Partial<VaultSearchResponse>
+      if (!Array.isArray(payload.results)) throw new Error('Vault search returned an invalid response')
+      const results = payload.results
 
       return {
         results,
@@ -258,8 +259,8 @@ export class VaultClient {
         result_count:
           typeof payload.result_count === 'number' ? payload.result_count : results.length
       }
-    } catch {
-      return { results: [], query, result_count: 0 }
+    } catch (error) {
+      return { results: [], query, result_count: 0, error: formatErrorMessage(error) }
     }
   }
 
@@ -321,10 +322,13 @@ export class VaultClient {
     }
   }
 
-  async pushNote(title: string, content: string, folder?: string): Promise<VaultPushResult> {
+  async pushNote(title: string, content: string, folder?: string, tags: string[] = []): Promise<VaultPushResult> {
     const sanitizedTitle = sanitizeNoteTitle(title)
     const targetFolder = folder?.trim() || 'Inbox'
-    const filePath = join(this.vaultPath, targetFolder, `${sanitizedTitle}.md`)
+    const filePath = resolve(this.vaultPath, targetFolder, `${sanitizedTitle}.md`)
+    if (!filePath.startsWith(resolve(this.vaultPath) + sep)) {
+      return { success: false, file_path: null, error: 'The note folder must be inside the vault' }
+    }
 
     try {
       await access(filePath)
@@ -342,13 +346,14 @@ export class VaultClient {
       `title: "${escapeYamlString(title || sanitizedTitle)}"`,
       `created: ${new Date().toISOString().slice(0, 10)}`,
       'source: helm',
+      `tags: ${JSON.stringify(tags)}`,
       '---',
       ''
     ].join('\n')
 
     try {
       await mkdir(join(this.vaultPath, targetFolder), { recursive: true })
-      await writeFile(filePath, `${frontmatter}\n${content}`, 'utf-8')
+      await writeFile(filePath, `${frontmatter}\n${content}`, { encoding: 'utf-8', flag: 'wx' })
     } catch (error) {
       return {
         success: false,
@@ -363,7 +368,7 @@ export class VaultClient {
       })
       await execFileAsync(
         'git',
-        ['-C', this.vaultPath, 'commit', '-m', `HELM: add ${sanitizedTitle}`],
+        ['-C', this.vaultPath, 'commit', '-m', `HELM: add ${sanitizedTitle}`, '--', filePath],
         { timeout: 30_000 }
       )
     } catch (error) {

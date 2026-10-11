@@ -188,6 +188,7 @@ describe('VaultClient', () => {
       expect(result).toEqual({
         results: [],
         query: 'test',
+        error: 'connect ECONNREFUSED 127.0.0.1:8742',
         result_count: 0
       })
     })
@@ -292,7 +293,7 @@ describe('VaultClient', () => {
       expect(mockExecFile).toHaveBeenNthCalledWith(
         2,
         'git',
-        ['-C', '/Users/test/Documents/ai/obsidian-vault', 'commit', '-m', 'HELM: add Commit Me'],
+        ['-C', '/Users/test/Documents/ai/obsidian-vault', 'commit', '-m', 'HELM: add Commit Me', '--', '/Users/test/Documents/ai/obsidian-vault/Inbox/Commit Me.md'],
         expect.objectContaining({ timeout: 30000 }),
         expect.any(Function)
       )
