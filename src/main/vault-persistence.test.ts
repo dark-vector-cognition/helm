@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { mkdtemp, readFile, rm } from 'fs/promises'
+import { mkdtemp, readFile, rm, symlink, access } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { VaultClient } from './vault-client'
@@ -28,4 +28,21 @@ it('persists content and tags, rejects traversal and preserves an existing note'
   expect(await readFile(saved.file_path!, 'utf8')).toBe(content)
   const escape = await new VaultClient(config).pushNote('Escape', 'outside', '../outside')
   expect(escape).toMatchObject({ success: false, error: 'The note folder must be inside the vault' })
+})
+
+it('rejects a symlinked folder and escapes multiline titles', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'helm-root-'))
+  const outside = await mkdtemp(join(tmpdir(), 'helm-outside-'))
+  directories.push(root, outside)
+  await symlink(outside, join(root, 'Linked'))
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 503, text: async () => 'offline' }))
+  const client = new VaultClient({ vaultRagEndpoint: 'http://127.0.0.1:8742', vaultPath: root,
+    vaultRagLocation: 'local', vaultRagRemoteHost: 'unused' })
+  expect(await client.pushNote('Escape', 'outside', 'Linked')).toMatchObject({ success: false })
+  expect(await client.pushNote('Escape', 'outside', 'Linked/new')).toMatchObject({ success: false })
+  await expect(access(join(outside, 'new'))).rejects.toThrow()
+  const title = 'First\nsecond\rline'
+  const saved = await client.pushNote(title, 'body')
+  expect(saved.success).toBe(true)
+  expect(await readFile(saved.file_path!, 'utf8')).toContain(`title: ${JSON.stringify(title)}\n`)
 })
