@@ -562,6 +562,7 @@ export interface VaultSearchResult {
 }
 
 export interface VaultSearchResponse {
+  error?: string
   results: VaultSearchResult[]
   query: string
   result_count: number
@@ -623,5 +624,5 @@ export interface HelmConfig {
   vaultRagLocation: 'local' | 'remote'
   vaultRagRemoteHost: string
   vaultRagAutoCheck: boolean
-  hive?: HiveConfig
+  hive?: Partial<HiveConfig>
 }

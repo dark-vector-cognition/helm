@@ -1,9 +1,9 @@
-import { config as dotenvConfig } from 'dotenv'
 import { join, basename } from 'path'
 import { pathToFileURL } from 'node:url'
+import { loadEnvironment } from './app-paths'
 
 // Load .env before anything else reads process.env
-dotenvConfig({ path: join(process.cwd(), '.env') })
+loadEnvironment()
 
 import {
   app,
@@ -278,8 +278,8 @@ app.whenReady().then(() => {
   ipcMain.handle(IPC_CHANNELS.VAULT_REINDEX, () => getVaultClient().triggerReindex())
   ipcMain.handle(
     IPC_CHANNELS.VAULT_PUSH_NOTE,
-    (_event, title: string, content: string, folder?: string) =>
-      getVaultClient().pushNote(title, content, folder)
+    (_event, title: string, content: string, folder?: string, tags?: string[]) =>
+      getVaultClient().pushNote(title, content, folder, tags)
   )
   ipcMain.handle(IPC_CHANNELS.VAULT_PULL_SYNC, () => getVaultClient().pullSync())
 

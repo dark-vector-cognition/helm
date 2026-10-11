@@ -55,8 +55,8 @@ export function VaultStatusBar(): JSX.Element {
           type="button"
           className="vault-action-btn"
           onClick={() => void pullSync()}
-          disabled={pulling || !online}
-          title={online ? 'Pull latest from git and reindex' : 'Vault offline'}
+          disabled={pulling}
+          title="Pull the latest vault files"
         >
           {pulling ? (
             <span className="vault-spinner" />
