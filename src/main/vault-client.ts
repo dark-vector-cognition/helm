@@ -1,7 +1,7 @@
 import { execFile } from 'child_process'
-import { access, mkdir, writeFile } from 'fs/promises'
+import { access, mkdir, realpath, writeFile } from 'fs/promises'
 import { homedir } from 'os'
-import { join, resolve, sep } from 'path'
+import { dirname, join, resolve, sep } from 'path'
 import type {
   HelmConfig,
   VaultChunk,
@@ -126,9 +126,6 @@ function parseFilesUpdated(output: string): number {
   return fileLines?.length ?? 0
 }
 
-function escapeYamlString(value: string): string {
-  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
-}
 
 function sanitizeNoteTitle(title: string): string {
   const sanitized = title.trim().replace(/[\/\\?%*:|"<>]/g, '-').replace(/\s+/g, ' ')
@@ -343,7 +340,7 @@ export class VaultClient {
 
     const frontmatter = [
       '---',
-      `title: "${escapeYamlString(title || sanitizedTitle)}"`,
+      `title: ${JSON.stringify(title || sanitizedTitle)}`,
       `created: ${new Date().toISOString().slice(0, 10)}`,
       'source: helm',
       `tags: ${JSON.stringify(tags)}`,
@@ -352,7 +349,27 @@ export class VaultClient {
     ].join('\n')
 
     try {
+      const root = await realpath(this.vaultPath)
+      let ancestor = dirname(filePath)
+      while (true) {
+        try {
+          const existing = await realpath(ancestor)
+          if (existing !== root && !existing.startsWith(root + sep)) {
+            throw new Error('The note folder must be inside the vault')
+          }
+          break
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+          const parent = dirname(ancestor)
+          if (parent === ancestor) throw error
+          ancestor = parent
+        }
+      }
       await mkdir(join(this.vaultPath, targetFolder), { recursive: true })
+      const parent = await realpath(join(this.vaultPath, targetFolder))
+      if (parent !== root && !parent.startsWith(root + sep)) {
+        throw new Error('The note folder must be inside the vault')
+      }
       await writeFile(filePath, `${frontmatter}\n${content}`, { encoding: 'utf-8', flag: 'wx' })
     } catch (error) {
       return {

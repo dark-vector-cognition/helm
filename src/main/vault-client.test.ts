@@ -11,6 +11,7 @@ vi.mock('child_process', () => ({
 }))
 
 vi.mock('fs/promises', () => ({
+  realpath: async (path: string) => path,
   access: (...args: unknown[]) => mockAccess(...args),
   mkdir: (...args: unknown[]) => mockMkdir(...args),
   writeFile: (...args: unknown[]) => mockWriteFile(...args)
