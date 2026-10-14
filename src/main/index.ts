@@ -1,4 +1,5 @@
 import { join, basename } from 'path'
+import { homedir } from 'os'
 import { pathToFileURL } from 'node:url'
 import { loadEnvironment } from './app-paths'
 
@@ -257,9 +258,9 @@ app.whenReady().then(() => {
     const currentConfig = loadConfig()
     return new VaultClient({
       vaultRagEndpoint: currentConfig.vaultRagEndpoint ?? 'http://127.0.0.1:8742',
-      vaultPath: currentConfig.vaultPath ?? '/Users/operator/Documents/ai/obsidian-vault',
+      vaultPath: currentConfig.vaultPath ?? join(homedir(), 'Documents', 'ai', 'obsidian-vault'),
       vaultRagLocation: currentConfig.vaultRagLocation ?? 'local',
-      vaultRagRemoteHost: currentConfig.vaultRagRemoteHost ?? 'vault-host'
+      vaultRagRemoteHost: currentConfig.vaultRagRemoteHost ?? ''
     })
   }
 
