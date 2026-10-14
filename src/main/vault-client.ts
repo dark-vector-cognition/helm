@@ -14,7 +14,7 @@ import type {
 const DEFAULT_VAULT_RAG_ENDPOINT = 'http://127.0.0.1:8742'
 const DEFAULT_VAULT_PATH = join(homedir(), 'Documents', 'ai', 'obsidian-vault')
 const DEFAULT_VAULT_RAG_LOCATION = 'local'
-const DEFAULT_VAULT_RAG_REMOTE_HOST = 'stormbreaker'
+const DEFAULT_VAULT_RAG_REMOTE_HOST = ''
 const DEFAULT_LOCAL_VAULT_RAG_PATH = join(homedir(), 'vault-rag')
 const EXEC_TIMEOUT_MS = 10 * 60 * 1000
 
@@ -283,6 +283,16 @@ export class VaultClient {
   }
 
   async triggerReindex(): Promise<VaultReindexResult> {
+    // Remote vault-rag is off until a host is configured; never shell out to ssh with an empty host.
+    if (this.location === 'remote' && !this.remoteHost.trim()) {
+      return {
+        success: false,
+        files_processed: null,
+        duration_ms: null,
+        error: 'Remote vault-rag host is not configured (set vaultRagRemoteHost)'
+      }
+    }
+
     try {
       const result =
         this.location === 'remote'

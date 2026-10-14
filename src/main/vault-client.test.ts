@@ -21,7 +21,7 @@ const baseConfig = {
   vaultRagEndpoint: 'http://127.0.0.1:8742',
   vaultPath: '/Users/test/Documents/ai/obsidian-vault',
   vaultRagLocation: 'local' as const,
-  vaultRagRemoteHost: 'stormbreaker'
+  vaultRagRemoteHost: 'vault-host.example'
 }
 
 describe('VaultClient', () => {
@@ -385,16 +385,29 @@ describe('VaultClient', () => {
       const client = new VaultClient({
         ...baseConfig,
         vaultRagLocation: 'remote',
-        vaultRagRemoteHost: 'stormbreaker'
+        vaultRagRemoteHost: 'vault-host.example'
       })
       await client.triggerReindex()
 
       expect(mockExecFile).toHaveBeenCalledWith(
         'ssh',
-        ['stormbreaker', 'cd ~/vault-rag && python scripts/full_reindex.py'],
+        ['vault-host.example', 'cd ~/vault-rag && python scripts/full_reindex.py'],
         expect.objectContaining({ timeout: 600000 }),
         expect.any(Function)
       )
+    })
+
+    it('refuses remote reindex when no remote host is configured', async () => {
+      const client = new VaultClient({
+        ...baseConfig,
+        vaultRagLocation: 'remote',
+        vaultRagRemoteHost: ''
+      })
+      const result = await client.triggerReindex()
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('not configured')
+      expect(mockExecFile).not.toHaveBeenCalled()
     })
 
     it('returns error when script fails', async () => {
