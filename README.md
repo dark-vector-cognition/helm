@@ -18,8 +18,8 @@ The 4.0 line turned HELM into an operator shell with page ownership instead of p
 New here? Paste `docs/llm-setup-prompt.md` into your AI assistant for guided setup.
 
 ```bash
-git clone https://github.com/kunalnano/hydra.git
-cd hydra
+git clone https://github.com/dark-vector-cognition/helm.git
+cd helm
 cp .env.example .env
 npm install
 npm run dev
