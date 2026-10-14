@@ -21,7 +21,7 @@ const DEFAULT_CONFIG: HelmConfig = {
   vaultRagEndpoint: 'http://127.0.0.1:8742',
   vaultPath: join(homedir(), 'Documents', 'ai', 'obsidian-vault'),
   vaultRagLocation: 'local',
-  vaultRagRemoteHost: 'vault-host',
+  vaultRagRemoteHost: '',
   vaultRagAutoCheck: true
 }
 

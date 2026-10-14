@@ -11,7 +11,7 @@ const TEST_VAULT_DEFAULTS = {
   vaultRagEndpoint: 'http://127.0.0.1:8742',
   vaultPath: '/Users/test/Documents/ai/obsidian-vault',
   vaultRagLocation: 'local' as const,
-  vaultRagRemoteHost: 'vault-host',
+  vaultRagRemoteHost: '',
   vaultRagAutoCheck: true
 }
 
