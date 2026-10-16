@@ -1,6 +1,7 @@
 node_modules
 dist
 out
+*.tsbuildinfo
 .DS_Store
 *.log*
 bin/
