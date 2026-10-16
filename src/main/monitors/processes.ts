@@ -37,7 +37,7 @@ function extractProcessName(command: string): string {
 function extractWorkingDir(command: string): string | undefined {
   // Try Unix-style path first
   const unixMatch = command.match(/\/(Users|home)\/[^\s]+/)
-  // Try Windows-style path (e.g. C:\Users\... or C:/Users/...)
+  // Try Windows-style path (a drive letter, then Users or home, with either slash style)
   const winMatch = command.match(/[A-Za-z]:[/\\](?:Users|home)[/\\][^\s]+/)
 
   if (!unixMatch && !winMatch) return undefined
