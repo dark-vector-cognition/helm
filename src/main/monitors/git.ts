@@ -240,6 +240,17 @@ export async function getRepoCommitHistory(
 const SAFE_GIT_ACTIONS = ['pull', 'push', 'stash', 'stash pop', 'fetch'] as const
 
 /**
+ * The reason a git call failed, for the screen: what git printed on stderr (for example
+ * "No stash entries found."), else the exit message from the failed call.
+ */
+function describeGitFailure(err: unknown): string {
+  if (!(err instanceof Error)) return 'Git action failed'
+  const stderr = (err as Error & { stderr?: unknown }).stderr
+  const fromGit = typeof stderr === 'string' ? stderr.trim() : ''
+  return fromGit || err.message
+}
+
+/**
  * Execute a safe git action on a repo.
  * Only whitelisted commands are allowed, and git runs by its absolute path with no shell.
  */
@@ -254,10 +265,6 @@ export async function runGitAction(repoPath: string, action: string): Promise<Gi
     })
     return { success: true, output: stdout.trim() || stderr.trim() || 'Done' }
   } catch (err) {
-    const message =
-      err instanceof Error
-        ? (err as Error & { stderr?: string }).stderr?.trim() || err.message
-        : 'Git action failed'
-    return { success: false, output: message }
+    return { success: false, output: describeGitFailure(err) }
   }
 }

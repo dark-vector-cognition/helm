@@ -112,7 +112,7 @@ describe('every git call uses the absolute path from the resolver', () => {
     expect(mockRequireGit).not.toHaveBeenCalled()
   })
 
-  it('shows git output on success and git stderr on failure', async () => {
+  it('shows git output on success', async () => {
     mockExecFile.mockImplementation((_f: string, _a: string[], _o: unknown, cb: Callback) =>
       cb(null, '', 'Everything up-to-date\n')
     )
@@ -120,13 +120,47 @@ describe('every git call uses the absolute path from the resolver', () => {
       success: true,
       output: 'Everything up-to-date'
     })
+  })
 
-    mockExecFile.mockImplementation((_f: string, _a: string[], _o: unknown, cb: Callback) =>
-      cb(Object.assign(new Error('exit 1'), { stderr: 'fatal: no remote\n' }), '', 'fatal: no remote\n')
-    )
-    await expect(runGitAction('/work/app', 'pull')).resolves.toEqual({
+  // Real execFile with a callback passes stdout and stderr as separate arguments. The error it
+  // builds has a message and an exit code, and no stderr property.
+  function realExecFileFailure(stderr: string, stdout = ''): void {
+    mockExecFile.mockImplementation((file: string, args: string[], _o: unknown, cb: Callback) => {
+      const error = Object.assign(new Error(`Command failed: ${file} ${args.join(' ')}\n${stderr}`), {
+        code: 1
+      })
+      expect(error).not.toHaveProperty('stderr')
+      cb(error, stdout, stderr)
+    })
+  }
+
+  it('shows what git printed on stderr when an action fails', async () => {
+    realExecFileFailure('No stash entries found.\n')
+
+    await expect(runGitAction('/work/app', 'stash pop')).resolves.toEqual({
       success: false,
-      output: 'fatal: no remote'
+      output: 'No stash entries found.'
+    })
+  })
+
+  it('shows the exit message when git printed nothing on stderr', async () => {
+    realExecFileFailure('', 'CONFLICT (content): merge conflict in a.ts\n')
+
+    const result = await runGitAction('/work/app', 'pull')
+
+    expect(result.success).toBe(false)
+    expect(result.output).toContain('Command failed')
+    expect(result.output).toContain('pull')
+  })
+
+  it('shows the exit message when the failure is not an Error', async () => {
+    mockExecFile.mockImplementation((_f: string, _a: string[], _o: unknown, cb: Callback) =>
+      cb('boom' as unknown as Error, '', '')
+    )
+
+    await expect(runGitAction('/work/app', 'fetch')).resolves.toEqual({
+      success: false,
+      output: 'Git action failed'
     })
   })
 })
