@@ -1,7 +1,7 @@
 {
   "name": "helm",
-  "version": "4.0.2",
-  "description": "HELM — Operator shell for local AI systems, processes, ports, and git repos",
+  "version": "5.0.0",
+  "description": "HELM: Operator shell for local AI systems, processes, ports, and git repos",
   "main": "./out/main/index.js",
   "author": "Dark Vector Cognition LLC",
   "homepage": "https://github.com/dark-vector-cognition/helm",
@@ -12,7 +12,7 @@
   "bugs": {
     "url": "https://github.com/dark-vector-cognition/helm/issues"
   },
-  "license": "SEE LICENSE IN LICENSE",
+  "license": "Apache-2.0",
   "engines": {
     "node": ">=22.12.0"
   },
