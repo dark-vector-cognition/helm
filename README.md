@@ -92,6 +92,7 @@ Config file: `~/.config/helm/config.json`
 | Option            | Default                 | Description                                         |
 | ----------------- | ----------------------- | --------------------------------------------------- |
 | `lmStudioUrl`     | unset (no model)        | OpenAI-compatible server URL for AI briefings       |
+| `apiKey`          | unset                   | Optional API key for hosted endpoints, sent as `Authorization: Bearer <key>` to the configured URL only. The `LLM_API_KEY` environment variable overrides it |
 | `gitRepoPaths`    | `[]`                    | Paths to monitor for git status                     |
 | `monitorInterval` | `2000`                  | Monitor polling interval in milliseconds            |
 | `staffBinPath`    | auto-detected           | Path to the `staff` binary for security scans       |

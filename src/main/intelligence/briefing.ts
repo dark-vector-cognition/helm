@@ -1,6 +1,11 @@
 import type { SystemState, BriefingResult } from '../../shared/types'
 import { scoreSystem } from '../health'
-import { healLmStudioConnection, isLmStudioConnectivityError, NO_MODEL_MESSAGE } from './lmstudio'
+import {
+  buildAuthHeaders,
+  healLmStudioConnection,
+  isLmStudioConnectivityError,
+  NO_MODEL_MESSAGE
+} from './lmstudio'
 
 export function buildBriefingPrompt(state: SystemState): string {
   const sections: string[] = []
@@ -145,7 +150,7 @@ export async function generateBriefing(state: SystemState): Promise<BriefingResu
 
     const response = await fetch(`${connection.url}/v1/chat/completions`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer lm-studio' },
+      headers: { 'Content-Type': 'application/json', ...buildAuthHeaders(connection.url) },
       body: JSON.stringify({
         model: connection.model || 'local-model',
         messages: [

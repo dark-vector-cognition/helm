@@ -25,6 +25,7 @@ vi.mock('child_process', () => ({
 describe('healLmStudioConnection', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    delete process.env.LLM_API_KEY
     loadConfig.mockReturnValue({
       gitRepoPaths: [],
       monitorInterval: 2000,
@@ -139,9 +140,7 @@ describe('healLmStudioConnection', () => {
     )
     expect(fetchImpl).toHaveBeenCalledWith(
       'http://10.55.0.22:1234/v1/models',
-      expect.objectContaining({
-        headers: { Authorization: 'Bearer lm-studio' }
-      })
+      expect.objectContaining({ headers: {} })
     )
   })
 
@@ -244,5 +243,157 @@ describe('healLmStudioConnection with no model configured', () => {
     expect(result.configured).toBe(true)
     expect(result.message).toContain('Checked')
     expect(fetchImpl.mock.calls[0][0]).toBe('http://127.0.0.1:11434/v1/models')
+  })
+})
+
+describe('optional API key', () => {
+  const savedEnvKey = process.env.LLM_API_KEY
+  const savedEnvUrl = process.env.LM_STUDIO_URL
+  const HOSTED = 'https://api.example.com/v1'
+
+  const okResponse = (): Response =>
+    ({ ok: true, json: async () => ({ data: [{ id: 'hosted-model' }] }) }) as Response
+
+  const sentHeaders = (fetchImpl: ReturnType<typeof vi.fn>, index = 0): Record<string, string> =>
+    (fetchImpl.mock.calls[index][1] as { headers: Record<string, string> }).headers
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    delete process.env.LLM_API_KEY
+    delete process.env.LM_STUDIO_URL
+    networkInterfaces.mockReturnValue({})
+    exec.mockImplementation((_command, _options, callback) => {
+      callback(null, { stdout: '', stderr: '' })
+    })
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    if (savedEnvKey === undefined) delete process.env.LLM_API_KEY
+    else process.env.LLM_API_KEY = savedEnvKey
+    if (savedEnvUrl === undefined) delete process.env.LM_STUDIO_URL
+    else process.env.LM_STUDIO_URL = savedEnvUrl
+  })
+
+  it('sends Authorization: Bearer <key> to the configured endpoint when apiKey is in the config file', async () => {
+    loadConfig.mockReturnValue({ lmStudioUrl: HOSTED, apiKey: 'cfg-key' })
+    const fetchImpl = vi.fn(async (_url: string, _init?: unknown) => okResponse())
+
+    const { healLmStudioConnection } = await import('./lmstudio')
+    const result = await healLmStudioConnection({ fetchImpl: fetchImpl as unknown as typeof fetch })
+
+    expect(result.success).toBe(true)
+    expect(fetchImpl.mock.calls[0][0]).toBe('https://api.example.com/v1/models')
+    expect(sentHeaders(fetchImpl)).toEqual({ Authorization: 'Bearer cfg-key' })
+  })
+
+  it('sends no Authorization header when no key is set', async () => {
+    loadConfig.mockReturnValue({ lmStudioUrl: HOSTED })
+    const fetchImpl = vi.fn(async (_url: string, _init?: unknown) => okResponse())
+
+    const { healLmStudioConnection } = await import('./lmstudio')
+    await healLmStudioConnection({ fetchImpl: fetchImpl as unknown as typeof fetch })
+
+    expect(sentHeaders(fetchImpl)).toEqual({})
+    expect(sentHeaders(fetchImpl)).not.toHaveProperty('Authorization')
+  })
+
+  it('treats an empty or whitespace-only key as not set', async () => {
+    loadConfig.mockReturnValue({ lmStudioUrl: HOSTED, apiKey: '   ' })
+    process.env.LLM_API_KEY = '  '
+    const fetchImpl = vi.fn(async (_url: string, _init?: unknown) => okResponse())
+
+    const { healLmStudioConnection } = await import('./lmstudio')
+    await healLmStudioConnection({ fetchImpl: fetchImpl as unknown as typeof fetch })
+
+    expect(sentHeaders(fetchImpl)).toEqual({})
+  })
+
+  it('lets LLM_API_KEY in the environment override the config file key', async () => {
+    loadConfig.mockReturnValue({ lmStudioUrl: HOSTED, apiKey: 'cfg-key' })
+    process.env.LLM_API_KEY = 'env-key'
+    const fetchImpl = vi.fn(async (_url: string, _init?: unknown) => okResponse())
+
+    const { healLmStudioConnection } = await import('./lmstudio')
+    await healLmStudioConnection({ fetchImpl: fetchImpl as unknown as typeof fetch })
+
+    expect(sentHeaders(fetchImpl)).toEqual({ Authorization: 'Bearer env-key' })
+  })
+
+  it('uses the environment key alone when the config file has none', async () => {
+    loadConfig.mockReturnValue({ lmStudioUrl: HOSTED })
+    process.env.LLM_API_KEY = ' env-key '
+    const fetchImpl = vi.fn(async (_url: string, _init?: unknown) => okResponse())
+
+    const { healLmStudioConnection } = await import('./lmstudio')
+    await healLmStudioConnection({ fetchImpl: fetchImpl as unknown as typeof fetch })
+
+    expect(sentHeaders(fetchImpl)).toEqual({ Authorization: 'Bearer env-key' })
+  })
+
+  it('never probes discovered hosts or rewrites the saved URL when a key is set', async () => {
+    loadConfig.mockReturnValue({ lmStudioUrl: HOSTED, apiKey: 'cfg-key' })
+    networkInterfaces.mockReturnValue({ en0: [{ family: 'IPv4', address: '10.55.0.5' }] })
+    exec.mockImplementation((_command, _options, callback) => {
+      callback(null, {
+        stdout: '? (10.55.0.11) at aa:bb:cc:dd:ee:ff on en0 ifscope [ethernet]\n',
+        stderr: ''
+      })
+    })
+    const fetchImpl = vi.fn(async (_url: string, _init?: unknown): Promise<Response> => {
+      throw new Error('connect ECONNREFUSED')
+    })
+
+    const { healLmStudioConnection } = await import('./lmstudio')
+    const result = await healLmStudioConnection({
+      persist: true,
+      fetchImpl: fetchImpl as unknown as typeof fetch
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.configured).toBe(true)
+    expect(fetchImpl.mock.calls.map((call) => call[0])).toEqual(['https://api.example.com/v1/models'])
+    expect(exec).not.toHaveBeenCalled()
+    expect(saveConfig).not.toHaveBeenCalled()
+  })
+
+  it('sends the key only to the configured endpoint', async () => {
+    loadConfig.mockReturnValue({ lmStudioUrl: HOSTED, apiKey: 'cfg-key' })
+    const { buildAuthHeaders } = await import('./lmstudio')
+    const config = { lmStudioUrl: HOSTED, apiKey: 'cfg-key' }
+
+    expect(buildAuthHeaders('https://api.example.com', config)).toEqual({
+      Authorization: 'Bearer cfg-key'
+    })
+    expect(buildAuthHeaders('https://api.example.com/v1/', config)).toEqual({
+      Authorization: 'Bearer cfg-key'
+    })
+    expect(buildAuthHeaders('http://localhost:1234', config)).toEqual({})
+    expect(buildAuthHeaders('http://10.55.0.11:1234', config)).toEqual({})
+    expect(buildAuthHeaders('https://other.example.com', config)).toEqual({})
+    expect(buildAuthHeaders('not a url', config)).toEqual({})
+  })
+
+  it('never logs or returns the key', async () => {
+    loadConfig.mockReturnValue({ lmStudioUrl: HOSTED, apiKey: 'super-secret-key-123' })
+    const spies = [
+      vi.spyOn(console, 'log').mockImplementation(() => {}),
+      vi.spyOn(console, 'warn').mockImplementation(() => {}),
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+    ]
+    const fetchImpl = vi.fn(async (_url: string, _init?: unknown): Promise<Response> => {
+      throw new Error('connect ECONNREFUSED')
+    })
+
+    const { healLmStudioConnection } = await import('./lmstudio')
+    const result = await healLmStudioConnection({
+      persist: true,
+      fetchImpl: fetchImpl as unknown as typeof fetch
+    })
+
+    expect(JSON.stringify(result)).not.toContain('super-secret-key-123')
+    for (const spy of spies) {
+      expect(JSON.stringify(spy.mock.calls)).not.toContain('super-secret-key-123')
+    }
   })
 })
