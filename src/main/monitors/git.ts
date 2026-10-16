@@ -203,16 +203,37 @@ export function parseGitLog(logOutput: string, repoName: string): GitCommit[] {
   return commits
 }
 
+export const MIN_COMMIT_LIMIT = 1
+export const MAX_COMMIT_LIMIT = 100
+
+/**
+ * A commit limit is valid only when it is a whole number from 1 to 100. The value comes over IPC,
+ * so its type is not guaranteed: strings, floats, NaN, Infinity, and out-of-range numbers all fail.
+ */
+export function isValidCommitLimit(limit: unknown): limit is number {
+  return (
+    typeof limit === 'number' &&
+    Number.isInteger(limit) &&
+    limit >= MIN_COMMIT_LIMIT &&
+    limit <= MAX_COMMIT_LIMIT
+  )
+}
+
+/**
+ * Recent commits of one repo. An invalid limit returns no commits and runs nothing. git runs
+ * with an argument array and no shell, so neither the limit nor the path is ever parsed as a command.
+ */
 export async function getRepoCommitHistory(
   repoPath: string,
   limit: number = 20
 ): Promise<GitCommit[]> {
+  if (!isValidCommitLimit(limit)) return []
   try {
     const repoName = repoPath.split(/[/\\]/).pop() || repoPath
-    // limit is always a number from the app, repoPath comes from internal repo scanning
-    const { stdout } = await execAsync(
-      `git log --pretty=format:'%H|%an|%ae|%at|%s|%b§§§' -n ${limit}`,
-      { cwd: repoPath, maxBuffer: 1024 * 1024 }
+    const stdout = await runFile(
+      'git',
+      ['log', '--pretty=format:%H|%an|%ae|%at|%s|%b§§§', '-n', String(limit)],
+      { cwd: repoPath }
     )
     return parseGitLog(stdout, repoName)
   } catch {

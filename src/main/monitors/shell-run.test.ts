@@ -13,7 +13,7 @@ import {
   runPowerShell
 } from './shell-run'
 import { expandGlobPattern } from './logs'
-import { scanForRepos } from './git'
+import { getRepoCommitHistory, scanForRepos } from './git'
 
 // Paths that would break or hijack a PowerShell command string if they were pasted into one.
 const NASTY_PATHS = [
@@ -122,5 +122,34 @@ describe('PowerShell calls keep paths out of the command text', () => {
 
     await expect(expandGlobPattern("C:\\O'Brien\\*.log")).resolves.toEqual([])
     await expect(scanForRepos(["C:\\O'Brien"])).resolves.toEqual([])
+  })
+})
+
+describe('commit history runs git with an argument array', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockExecFile.mockImplementation(
+      (_file: string, _args: string[], _opts: unknown, cb: (e: Error | null, out: string) => void) =>
+        cb(null, '')
+    )
+  })
+
+  it('passes the limit as its own argument and the repo path as the working directory', async () => {
+    await getRepoCommitHistory("/home/o'brien/repo", 7)
+
+    const call = mockExecFile.mock.calls[0]
+    expect(call[0]).toBe('git')
+    expect(call[1].slice(0, 1)).toEqual(['log'])
+    expect(call[1].slice(-2)).toEqual(['-n', '7'])
+    expect(call[2].cwd).toBe("/home/o'brien/repo")
+    expect(mockExec).not.toHaveBeenCalled()
+  })
+
+  it('does not run git at all for an invalid limit', async () => {
+    for (const limit of ['1; touch x #', 1.5, -1, 0, 101, 1e9, Number.NaN, Infinity, '5', null]) {
+      await expect(getRepoCommitHistory('/repo', limit as unknown as number)).resolves.toEqual([])
+    }
+    expect(mockExecFile).not.toHaveBeenCalled()
+    expect(mockExec).not.toHaveBeenCalled()
   })
 })
