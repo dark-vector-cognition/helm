@@ -21,7 +21,7 @@ export function powerShellArgs(script: string): string[] {
 function run(
   file: string,
   args: string[],
-  options: { timeout?: number; env?: NodeJS.ProcessEnv }
+  options: { timeout?: number; env?: NodeJS.ProcessEnv; cwd?: string }
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile(file, args, { ...options, maxBuffer: 10 * 1024 * 1024 }, (error, stdout) => {
@@ -48,9 +48,13 @@ export function runPowerShell(
   return run('powershell.exe', powerShellArgs(script), { timeout, env })
 }
 
-/** Run a program with separate arguments and no shell. */
-export function runFile(file: string, args: string[], timeout?: number): Promise<string> {
-  return run(file, args, { timeout })
+/** Run a program with separate arguments and no shell. `cwd` is the working directory. */
+export function runFile(
+  file: string,
+  args: string[],
+  options: { timeout?: number; cwd?: string } = {}
+): Promise<string> {
+  return run(file, args, options)
 }
 
 /**
