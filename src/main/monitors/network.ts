@@ -1,7 +1,6 @@
 import { exec } from 'child_process'
 import { setTimeout as delay } from 'timers/promises'
 import { promisify } from 'util'
-import { promises as dns } from 'dns'
 import type {
   NetworkConnection,
   NetworkProcess,
@@ -12,70 +11,6 @@ import type {
 import { isMacOS, isWindows } from '../platform'
 
 const execAsync = promisify(exec)
-
-// ── Reverse DNS cache ──────────────────────────────────────────
-const dnsCache = new Map<string, { host: string; expires: number }>()
-const DNS_TTL_MS = 5 * 60 * 1000 // 5 minute cache
-const DNS_TIMEOUT_MS = 2000
-const pendingLookups = new Set<string>()
-
-function isPrivateIp(ip: string): boolean {
-  return (
-    ip.startsWith('127.') ||
-    ip.startsWith('10.') ||
-    ip.startsWith('192.168.') ||
-    ip.startsWith('172.16.') || ip.startsWith('172.17.') || ip.startsWith('172.18.') ||
-    ip.startsWith('172.19.') || ip.startsWith('172.2') || ip.startsWith('172.3') ||
-    ip === '::1' || ip.startsWith('fe80:') || ip.startsWith('fd')
-  )
-}
-
-async function resolveHost(ip: string): Promise<string | undefined> {
-  const normalized = ip.replace(/^::ffff:/, '')
-  if (isPrivateIp(normalized) || normalized === 'localhost') return undefined
-
-  const cached = dnsCache.get(normalized)
-  if (cached && cached.expires > Date.now()) return cached.host
-
-  if (pendingLookups.has(normalized)) return cached?.host
-
-  pendingLookups.add(normalized)
-  try {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), DNS_TIMEOUT_MS)
-    const hostnames = await dns.reverse(normalized)
-    clearTimeout(timeout)
-    const host = hostnames[0] ?? undefined
-    if (host) {
-      dnsCache.set(normalized, { host, expires: Date.now() + DNS_TTL_MS })
-    }
-    return host
-  } catch {
-    // Cache the failure so we don't retry constantly
-    dnsCache.set(normalized, { host: normalized, expires: Date.now() + DNS_TTL_MS })
-    return undefined
-  } finally {
-    pendingLookups.delete(normalized)
-  }
-}
-
-export async function enrichConnectionsWithDns(connections: NetworkConnection[]): Promise<void> {
-  const internetConnections = connections.filter((c) => c.scope === 'internet')
-  const uniqueIps = [...new Set(internetConnections.map((c) => c.remoteAddress.replace(/^::ffff:/, '')))]
-
-  // Resolve up to 10 IPs per cycle to avoid blocking
-  const batch = uniqueIps.slice(0, 10)
-  await Promise.allSettled(batch.map((ip) => resolveHost(ip)))
-
-  // Apply cached results to all connections
-  for (const conn of connections) {
-    const normalized = conn.remoteAddress.replace(/^::ffff:/, '')
-    const cached = dnsCache.get(normalized)
-    if (cached && cached.host !== normalized) {
-      conn.resolvedHost = cached.host
-    }
-  }
-}
 
 interface RawNetworkEntry {
   name: string

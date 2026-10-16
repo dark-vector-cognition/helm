@@ -152,7 +152,6 @@ export interface NetworkConnection {
   localPort: number | null
   remoteAddress: string
   remotePort: number | null
-  resolvedHost?: string
   scope: NetworkScope
   bytesIn: number
   bytesOut: number
