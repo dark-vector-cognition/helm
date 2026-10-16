@@ -113,7 +113,7 @@ function extractName(path: string): string {
 
 /**
  * Parse a LuLu rules.plist XML string into FirewallRule[].
- * Uses regex-based extraction — works with XML plists only.
+ * Uses regex-based extraction - works with XML plists only.
  * For binary plists, use parseLuluRulesJson() instead.
  */
 export function parseLuluRules(xmlContent: string): FirewallRule[] {
@@ -214,7 +214,7 @@ export async function getFirewallRules(): Promise<FirewallState> {
     }
 
     // Use Python helper to parse NSKeyedArchiver binary plist.
-    // All arguments are hardcoded constants — no user input.
+    // All arguments are hardcoded constants - no user input.
     let rules: FirewallRule[] = []
     const parserPaths = getParserPaths()
 

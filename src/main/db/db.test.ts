@@ -70,7 +70,7 @@ describe('SQLite persistence', () => {
       expect(names).toContain('timeline_events')
     })
 
-    it('should be idempotent — calling initializeSchema twice does not error', () => {
+    it('should be idempotent - calling initializeSchema twice does not error', () => {
       expect(() => initializeSchema(db)).not.toThrow()
     })
   })
@@ -208,7 +208,7 @@ describe('SQLite persistence', () => {
       return {
         overallScore: 85,
         grade: 'B+',
-        verdict: 'Good posture — minor issues found',
+        verdict: 'Good posture - minor issues found',
         categories: [{ name: 'Firewall', score: 90, weight: 1, summary: 'Well configured' }],
         ...overrides
       }
@@ -220,7 +220,7 @@ describe('SQLite persistence', () => {
       expect(rows).toHaveLength(1)
       expect(rows[0].score).toBe(85)
       expect(rows[0].grade).toBe('B+')
-      expect(rows[0].verdict).toBe('Good posture — minor issues found')
+      expect(rows[0].verdict).toBe('Good posture - minor issues found')
       expect(rows[0].timestamp).toBeGreaterThan(0)
     })
 

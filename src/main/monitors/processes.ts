@@ -47,7 +47,7 @@ function extractWorkingDir(command: string): string | undefined {
     return extractWorkingDirFromSegments(unixMatch[0], '/')
   }
 
-  // Windows path — normalize backslashes to forward slashes for consistent processing
+  // Windows path - normalize backslashes to forward slashes for consistent processing
   const rawPath = (winMatch || unixMatch)![0]
   const normalized = rawPath.replace(/\\/g, '/')
   return extractWorkingDirFromSegments(normalized, '/')
@@ -78,7 +78,7 @@ function extractWorkingDirFromSegments(fullPath: string, sep: string): string | 
     }
   }
 
-  // No infrastructure dirs found — the path itself might be a file path.
+  // No infrastructure dirs found - the path itself might be a file path.
   // Return the directory (everything except the last segment if it looks like a file).
   const lastSegment = segments[segments.length - 1]
   if (lastSegment.includes('.') && segments.length > 3) {

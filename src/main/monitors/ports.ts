@@ -137,7 +137,7 @@ export function parseNetstatOutput(
 
     if (isNaN(pid)) continue
 
-    // Parse local address — format is address:port
+    // Parse local address - format is address:port
     const lastColon = localAddress.lastIndexOf(':')
     if (lastColon === -1) continue
 

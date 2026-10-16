@@ -68,13 +68,13 @@ async function resolveStaffBin(): Promise<string> {
     const resolved = stdout.trim().split('\n')[0]?.trim()
     if (resolved) return resolved
   } catch {
-    // which/where failed — fall through
+    // which/where failed - fall through
   }
 
   return 'staff'
 }
 
-// Local network CIDR — must be detected dynamically or configured by user
+// Local network CIDR - must be detected dynamically or configured by user
 let localNetworkTarget = ''
 
 async function detectLocalNetwork(): Promise<void> {
@@ -104,11 +104,11 @@ async function detectLocalNetwork(): Promise<void> {
       localNetworkTarget = parts.join('.')
     }
   } catch {
-    // No network target available — security scans requiring a target will fail gracefully
+    // No network target available - security scans requiring a target will fail gracefully
   }
 }
 
-// Fire and forget — resolve before first scan
+// Fire and forget - resolve before first scan
 detectLocalNetwork()
 
 function getSecurityReportPath(): string {
@@ -220,7 +220,7 @@ export function parsePostureFromScanOutput(output: string): SecurityPosture | nu
     const categories: SecurityPosture['categories'] = []
     const categoryPatterns = [
       // "Category: score/100 -- summary" or "Category: score -- summary"
-      /[-*]\s*\*?\*?([A-Za-z &/]+?)\*?\*?\s*:\s*(\d{1,3})(?:\/100)?\s*(?:[-—]\s*(.+))?/g,
+      /[-*]\s*\*?\*?([A-Za-z &/]+?)\*?\*?\s*:\s*(\d{1,3})(?:\/100)?\s*(?:[-\u2014]\s*(.+))?/g,
       // Table format: "| Category | score |"
       /\|\s*([A-Za-z &/]+?)\s*\|\s*(\d{1,3})\s*\|/g
     ]
@@ -258,12 +258,12 @@ export function parsePostureFromScanOutput(output: string): SecurityPosture | nu
     // Build verdict
     const verdict =
       overallScore >= 90
-        ? 'Strong posture — minimal exposure detected'
+        ? 'Strong posture - minimal exposure detected'
         : overallScore >= 75
-          ? 'Good posture — minor issues found'
+          ? 'Good posture - minor issues found'
           : overallScore >= 60
-            ? 'Fair posture — several areas need attention'
-            : 'Weak posture — significant vulnerabilities detected'
+            ? 'Fair posture - several areas need attention'
+            : 'Weak posture - significant vulnerabilities detected'
 
     return {
       overallScore,
@@ -277,7 +277,7 @@ export function parsePostureFromScanOutput(output: string): SecurityPosture | nu
 }
 
 // NOTE: exec() is used intentionally here. All command arguments come from hardcoded
-// constants (SCAN_COMMANDS) and a config-resolved binary path — no user input is
+// constants (SCAN_COMMANDS) and a config-resolved binary path - no user input is
 // interpolated into the shell string.
 export async function runSecurityScan(command: string): Promise<SecurityScanResult> {
   const id = generateScanId(command)
@@ -330,7 +330,7 @@ export async function runSecurityScan(command: string): Promise<SecurityScanResu
           const { insertPostureHistory } = await import('../db/queries')
           insertPostureHistory(posture)
         } catch {
-          // DB module might not be initialized — ignore
+          // DB module might not be initialized - ignore
         }
       }
     }

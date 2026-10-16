@@ -62,7 +62,7 @@ import { IPC_CHANNELS } from '../../shared/types'
 /**
  * Get real available memory on macOS using vm_stat.
  * os.freemem() only reports truly free pages, ignoring purgeable/cached memory
- * that macOS would release under pressure — leading to misleading 99% usage.
+ * that macOS would release under pressure - leading to misleading 99% usage.
  */
 async function getAvailableMemory(): Promise<number> {
   const totalMemory = totalmem()
@@ -280,7 +280,7 @@ export function startMonitoring(mainWindow: BrowserWindow, intervalMs?: number):
           try {
             insertAlert(event)
           } catch {
-            /* DB write failed — continue */
+            /* DB write failed - continue */
           }
           const notif: HelmNotification = {
             id: `${event.timestamp}-${event.rule}`,
@@ -294,7 +294,7 @@ export function startMonitoring(mainWindow: BrowserWindow, intervalMs?: number):
           try {
             dbInsertNotification(notif)
           } catch {
-            /* DB write failed — continue */
+            /* DB write failed - continue */
           }
           if (!mainWindow.isDestroyed()) {
             mainWindow.webContents.send(IPC_CHANNELS.NOTIFICATION, notif)
@@ -487,7 +487,7 @@ export function startMonitoring(mainWindow: BrowserWindow, intervalMs?: number):
         insertLogLines(lines)
         pruneOldLogLines(10000)
       } catch {
-        /* DB write failed — continue */
+        /* DB write failed - continue */
       }
     }
     if (!mainWindow.isDestroyed() && (kind === 'tail' || !hasPersistedLogs)) {
@@ -503,7 +503,7 @@ export function startMonitoring(mainWindow: BrowserWindow, intervalMs?: number):
     try {
       insertBriefing(result)
     } catch {
-      /* DB write failed — continue */
+      /* DB write failed - continue */
     }
     return result
   })
@@ -520,7 +520,7 @@ export function startMonitoring(mainWindow: BrowserWindow, intervalMs?: number):
     try {
       dbDismissNotification(id)
     } catch {
-      /* DB write failed — continue */
+      /* DB write failed - continue */
     }
   })
 

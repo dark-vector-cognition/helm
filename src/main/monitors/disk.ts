@@ -36,7 +36,7 @@ export function parseDfOutput(raw: string): DiskMount[] {
     const line = lines[i].trim()
     if (!line) continue
 
-    // Split by whitespace — last field (mount point) may contain spaces
+    // Split by whitespace - last field (mount point) may contain spaces
     const parts = line.split(/\s+/)
     if (parts.length < 6) continue
 

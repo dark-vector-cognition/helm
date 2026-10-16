@@ -22,13 +22,13 @@ npm run typecheck
 echo "Running tests..."
 npm test
 
-# 3. Bump version in package.json (no git tag — we tag manually)
+# 3. Bump version in package.json (no git tag - we tag manually)
 NEW_VERSION=$(npm version "$BUMP" --no-git-tag-version)
 echo "Bumped to $NEW_VERSION"
 
 # 4. Add changelog placeholder for the new version
 DATE=$(date +%Y-%m-%d)
-HEADER="## ${NEW_VERSION} — ${DATE}"
+HEADER="## ${NEW_VERSION} - ${DATE}"
 sed -i '' "s/^# Changelog$/# Changelog\n\n${HEADER}\n\n_TODO: Add release notes here._/" CHANGELOG.md
 
 # 5. Commit, tag, and push
