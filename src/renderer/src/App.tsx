@@ -62,7 +62,7 @@ const PAGES: PageMeta[] = [
     id: 'ai',
     label: 'AI',
     kicker: 'Local AI control',
-    description: 'Owns LM Studio control, AI briefings, and usage tracking.'
+    description: 'Owns the optional model connection, AI briefings, and usage tracking.'
   },
   {
     id: 'vault',

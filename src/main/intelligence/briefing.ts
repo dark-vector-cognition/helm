@@ -1,6 +1,6 @@
 import type { SystemState, BriefingResult } from '../../shared/types'
 import { scoreSystem } from '../health'
-import { healLmStudioConnection, isLmStudioConnectivityError } from './lmstudio'
+import { healLmStudioConnection, isLmStudioConnectivityError, NO_MODEL_MESSAGE } from './lmstudio'
 
 export function buildBriefingPrompt(state: SystemState): string {
   const sections: string[] = []
@@ -106,11 +106,25 @@ Rules:
 - Dirty git repos with uncommitted changes for context = info suggestion.
 - Agent in "waiting" status for extended time = warning.`
 
+/** The model is optional. With no endpoint configured this is a normal, quiet state, not a failure. */
+export function buildNoModelBriefing(timestamp = Date.now()): BriefingResult {
+  return {
+    summary: NO_MODEL_MESSAGE,
+    alerts: [],
+    suggestions: [
+      'Optional: run any OpenAI-compatible server (LM Studio, Ollama, llama.cpp) and set LM_STUDIO_URL to its address'
+    ],
+    timestamp
+  }
+}
+
 export async function generateBriefing(state: SystemState): Promise<BriefingResult> {
   const prompt = buildBriefingPrompt(state)
   const connection = await healLmStudioConnection({ persist: true })
 
   if (!connection.success || !connection.url) {
+    if (!connection.configured) return buildNoModelBriefing()
+
     return {
       summary: connection.message,
       alerts: [

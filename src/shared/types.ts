@@ -330,6 +330,8 @@ export interface LmStudioProbeAttempt {
 export interface LmStudioHealResult {
   success: boolean
   repaired: boolean
+  /** False when no model endpoint is configured. The model is optional. */
+  configured: boolean
   message: string
   url?: string
   model?: string

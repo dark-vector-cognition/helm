@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const loadConfig = vi.fn()
 const saveConfig = vi.fn()
@@ -162,5 +162,87 @@ describe('healLmStudioConnection', () => {
     expect(
       parseArpNeighborIps('? (10.55.0.10) at cc:ba:bd:fc:81:19 on en8 ifscope [ethernet]\n? (8.8.8.8) at aa:bb:cc:dd:ee:ff on en8 ifscope [ethernet]')
     ).toEqual(['10.55.0.10'])
+  })
+})
+
+describe('healLmStudioConnection with no model configured', () => {
+  const savedEnvUrl = process.env.LM_STUDIO_URL
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    delete process.env.LM_STUDIO_URL
+    loadConfig.mockReturnValue({
+      gitRepoPaths: [],
+      monitorInterval: 2000,
+      snapshotInterval: 30000
+    })
+    networkInterfaces.mockReturnValue({
+      en0: [{ family: 'IPv4', address: '10.55.0.5' }]
+    })
+    exec.mockImplementation((_command, _options, callback) => {
+      callback(null, {
+        stdout: '? (10.55.0.11) at aa:bb:cc:dd:ee:ff on en0 ifscope [ethernet]\n',
+        stderr: ''
+      })
+    })
+  })
+
+  afterEach(() => {
+    if (savedEnvUrl === undefined) delete process.env.LM_STUDIO_URL
+    else process.env.LM_STUDIO_URL = savedEnvUrl
+  })
+
+  it('reports a quiet not-configured state and only probes this machine', async () => {
+    const fetchImpl = vi.fn(async (_url: string) => {
+      throw new Error('connect ECONNREFUSED 127.0.0.1:1234')
+    })
+
+    const { healLmStudioConnection, NO_MODEL_MESSAGE } = await import('./lmstudio')
+    const result = await healLmStudioConnection({ persist: true, fetchImpl: fetchImpl as typeof fetch })
+
+    expect(result.success).toBe(false)
+    expect(result.configured).toBe(false)
+    expect(result.message).toBe(NO_MODEL_MESSAGE)
+    expect(result.message).not.toMatch(/unreachable|offline/i)
+    expect(fetchImpl.mock.calls.map((call) => call[0])).toEqual([
+      'http://localhost:1234/v1/models',
+      'http://127.0.0.1:1234/v1/models'
+    ])
+    expect(exec).not.toHaveBeenCalled()
+    expect(saveConfig).not.toHaveBeenCalled()
+  })
+
+  it('still finds a local server on the default port without saving anything', async () => {
+    const fetchImpl = vi.fn(async (_url: string) => {
+      return {
+        ok: true,
+        json: async () => ({ data: [{ id: 'local-default' }] })
+      } as Response
+    })
+
+    const { healLmStudioConnection } = await import('./lmstudio')
+    const result = await healLmStudioConnection({ persist: true, fetchImpl: fetchImpl as typeof fetch })
+
+    expect(result.success).toBe(true)
+    expect(result.configured).toBe(false)
+    expect(result.repaired).toBe(false)
+    expect(result.url).toBe('http://localhost:1234')
+    expect(result.model).toBe('local-default')
+    expect(saveConfig).not.toHaveBeenCalled()
+  })
+
+  it('treats an endpoint from LM_STUDIO_URL as configured', async () => {
+    process.env.LM_STUDIO_URL = 'http://127.0.0.1:11434'
+    const fetchImpl = vi.fn(async (_url: string) => {
+      throw new Error('connect ECONNREFUSED')
+    })
+
+    const { healLmStudioConnection } = await import('./lmstudio')
+    const result = await healLmStudioConnection({ persist: false, fetchImpl: fetchImpl as typeof fetch })
+
+    expect(result.success).toBe(false)
+    expect(result.configured).toBe(true)
+    expect(result.message).toContain('Checked')
+    expect(fetchImpl.mock.calls[0][0]).toBe('http://127.0.0.1:11434/v1/models')
   })
 })
