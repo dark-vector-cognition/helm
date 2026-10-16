@@ -19,7 +19,6 @@ import { evaluateRules } from '../intelligence/auto-heal'
 import type { PreviousState } from '../intelligence/auto-heal'
 import { generateBriefing } from '../intelligence/briefing'
 import { healLmStudioConnection } from '../intelligence/lmstudio'
-import { invokeYennefer } from '../intelligence/yennefer'
 import { DEFAULT_RULES } from '../intelligence/rules'
 import { getNetworkActivity } from './network'
 import { getFirewallRules } from './firewall'
@@ -513,17 +512,6 @@ export function startMonitoring(mainWindow: BrowserWindow, intervalMs?: number):
     return healLmStudioConnection({ persist: true })
   })
 
-  ipcMain.handle(IPC_CHANNELS.YENNEFER_REQUEST, async () => {
-    if (!latestState) return null
-    const result = await invokeYennefer(latestState)
-    try {
-      insertBriefing(result)
-    } catch {
-      /* DB write failed — continue */
-    }
-    return result
-  })
-
   ipcMain.handle(IPC_CHANNELS.GET_HEAL_HISTORY, () => getAlertHistory(100))
 
   ipcMain.on(IPC_CHANNELS.DISMISS_NOTIFICATION, (_event, id: string) => {
@@ -627,7 +615,6 @@ export function stopMonitoring(): void {
   ipcMain.removeAllListeners(IPC_CHANNELS.REQUEST_REFRESH)
   ipcMain.removeHandler(IPC_CHANNELS.BRIEFING_REQUEST)
   ipcMain.removeHandler(IPC_CHANNELS.LM_STUDIO_HEAL)
-  ipcMain.removeHandler(IPC_CHANNELS.YENNEFER_REQUEST)
   ipcMain.removeHandler(IPC_CHANNELS.GET_HEAL_HISTORY)
   ipcMain.removeAllListeners(IPC_CHANNELS.DISMISS_NOTIFICATION)
   ipcMain.removeHandler(IPC_CHANNELS.GET_FIREWALL_RULES)

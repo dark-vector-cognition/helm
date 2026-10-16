@@ -71,7 +71,7 @@ export interface AgentInfo {
 
 // ── HIVE Types ──────────────────────────────────────────────
 
-export type HiveRoleName = 'architect' | 'builder' | 'analyst' | 'ops' | 'strategist' | string
+export type HiveRoleName = 'architect' | 'builder' | 'analyst' | 'ops' | string
 export type HiveModel = 'opus' | 'sonnet' | 'haiku'
 
 export interface HiveRoleTemplate {
@@ -426,7 +426,6 @@ export const IPC_CHANNELS = {
   SESSION_DELTA: 'session:delta',
   CCUSAGE_STATE: 'ccusage:state',
   CCUSAGE_REFRESH: 'ccusage:refresh',
-  YENNEFER_REQUEST: 'intelligence:yennefer-request',
   SKILLS_FEED: 'skills:feed',
   REGISTRY_GET_ALL: 'registry:get-all',
   REGISTRY_GET_BY_ID: 'registry:get-by-id',
@@ -540,8 +539,6 @@ export interface AgentRegistryEntry {
   tags: string[]
 }
 
-export type YenneferStyle = 'adaptive' | 'throughput' | 'creative' | 'strict'
-
 export interface RadioHomeLocation {
   label: string
   latitude: number
@@ -616,8 +613,6 @@ export interface HelmConfig {
   agentPatterns?: { type: string; displayName: string; patterns: string[] }[]
   agentFeedPaths?: string[]
   logFilePaths?: string[]
-  yenneferEnabled?: boolean
-  yenneferStyle?: YenneferStyle
   radioHomeLocation?: RadioHomeLocation
   vaultRagEndpoint: string
   vaultPath: string
