@@ -138,3 +138,18 @@ export async function requireGit(): Promise<string> {
   if (!git) throw new GitNotFoundError()
   return git
 }
+
+/**
+ * Options placed before the subcommand of every git call HELM makes.
+ *
+ * `core.fsmonitor=false` stops git from running the program that a repository's own .git/config
+ * names in core.fsmonitor. git runs that program during status, fetch, stash and other commands
+ * that refresh the index, so without this a repository could run code during the Fleet scan.
+ * A setting given with -c on the command line wins over the repository's config file.
+ */
+export const GIT_SAFE_OPTIONS: readonly string[] = ['-c', 'core.fsmonitor=false']
+
+/** `args` (the git subcommand and its arguments) with GIT_SAFE_OPTIONS in front. */
+export function withSafeGitOptions(args: string[]): string[] {
+  return [...GIT_SAFE_OPTIONS, ...args]
+}

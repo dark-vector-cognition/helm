@@ -144,7 +144,7 @@ describe('commit history runs git with an argument array', () => {
 
     const call = mockExecFile.mock.calls[0]
     expect(call[0]).toBe('C:\\Program Files\\Git\\cmd\\git.exe')
-    expect(call[1].slice(0, 1)).toEqual(['log'])
+    expect(call[1].slice(0, 3)).toEqual(['-c', 'core.fsmonitor=false', 'log'])
     expect(call[1].slice(-2)).toEqual(['-n', '7'])
     expect(call[2].cwd).toBe("/home/o'brien/repo")
     expect(mockExec).not.toHaveBeenCalled()

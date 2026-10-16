@@ -21,12 +21,20 @@ const GIT = '/opt/tools/bin/git'
 
 type Callback = (error: Error | null, stdout?: string, stderr?: string) => void
 
+const SAFE = ['-c', 'core.fsmonitor=false']
+
+/** The git arguments after the options HELM puts in front of every call. Fails if they are missing. */
+function afterSafeOptions(args: string[]): string[] {
+  expect(args.slice(0, SAFE.length)).toEqual(SAFE)
+  return args.slice(SAFE.length)
+}
+
 /** Answer find and git calls the way a real machine would for one repo at /work/app. */
 function answerLikeAMachine(): void {
   mockExecFile.mockImplementation(
     (file: string, args: string[], _options: unknown, callback: Callback) => {
       if (file === 'find') return callback(null, '/work/app/.git\n', '')
-      const [verb, ...rest] = args
+      const [verb, ...rest] = afterSafeOptions(args)
       if (verb === 'rev-parse') return callback(null, 'main\n', '')
       if (verb === 'status' && rest.includes('--branch'))
         return callback(null, '## main...origin/main [ahead 2]\n M a.ts\n', '')
@@ -58,7 +66,7 @@ describe('every git call uses the absolute path from the resolver', () => {
     expect(repos).toHaveLength(1)
     expect(repos[0]).toMatchObject({ path: '/work/app', branch: 'main', ahead: 2, dirty: true })
     const calls = gitCalls()
-    expect(calls.map((call) => call.args)).toEqual(
+    expect(calls.map((call) => afterSafeOptions(call.args))).toEqual(
       expect.arrayContaining([
         ['rev-parse', '--abbrev-ref', 'HEAD'],
         ['status', '--porcelain'],
@@ -78,7 +86,7 @@ describe('every git call uses the absolute path from the resolver', () => {
     expect(commits).toHaveLength(1)
     const [call] = gitCalls()
     expect(call.file).toBe(GIT)
-    expect(call.args.slice(0, 1)).toEqual(['log'])
+    expect(afterSafeOptions(call.args).slice(0, 1)).toEqual(['log'])
     expect(call.args.slice(-2)).toEqual(['-n', '5'])
     expect(call.cwd).toBe('/work/app')
     expect(mockExec).not.toHaveBeenCalled()
@@ -98,7 +106,7 @@ describe('every git call uses the absolute path from the resolver', () => {
       const result = await runGitAction('/work/app', action)
 
       expect(result).toEqual({ success: true, output: 'ok' })
-      expect(gitCalls()).toEqual([{ file: GIT, args, cwd: '/work/app' }])
+      expect(gitCalls()).toEqual([{ file: GIT, args: [...SAFE, ...args], cwd: '/work/app' }])
     }
     expect(mockExec).not.toHaveBeenCalled()
   })
@@ -206,6 +214,19 @@ describe('no source file starts git by its bare name', () => {
     const bare = /\b(?:exec|execSync|execFile|execFileSync|execAsync|execFileAsync|spawn|spawnSync|runFile)\(\s*[`'"]git\b/
     const offenders = sourceFiles(root)
       .filter((file) => bare.test(readFileSync(file, 'utf-8')))
+      .map((file) => relative(root, file))
+
+    expect(offenders).toEqual([])
+  })
+
+  it('every file that asks for the git path also puts the safe options in front of its arguments', () => {
+    const root = join(__dirname, '..', '..')
+    const offenders = sourceFiles(root)
+      .filter((file) => !/git-binary\.ts$/.test(file))
+      .filter((file) => {
+        const text = readFileSync(file, 'utf-8')
+        return /\brequireGit\(/.test(text) && !/\bwithSafeGitOptions\(/.test(text)
+      })
       .map((file) => relative(root, file))
 
     expect(offenders).toEqual([])

@@ -2,7 +2,7 @@ import { execFile } from 'child_process'
 import { access, mkdir, realpath, writeFile } from 'fs/promises'
 import { homedir } from 'os'
 import { dirname, join, resolve, sep } from 'path'
-import { requireGit } from './git-binary'
+import { requireGit, withSafeGitOptions } from './git-binary'
 import type {
   HelmConfig,
   VaultChunk,
@@ -28,7 +28,7 @@ async function runGit(
   args: string[],
   options?: { cwd?: string; timeout?: number }
 ): Promise<{ stdout: string; stderr: string }> {
-  return execFileAsync(await requireGit(), args, options)
+  return execFileAsync(await requireGit(), withSafeGitOptions(args), options)
 }
 
 function execFileAsync(

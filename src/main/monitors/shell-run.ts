@@ -1,5 +1,5 @@
 import { execFile } from 'child_process'
-import { requireGit } from '../git-binary'
+import { requireGit, withSafeGitOptions } from '../git-binary'
 
 /**
  * Safe command running for paths that come from config or the file system.
@@ -78,7 +78,8 @@ export function runFile(
 /**
  * Run git in `cwd`. git is started by its absolute path, found on PATH only (see git-binary.ts),
  * so a git.exe planted in the repo cannot run. With no shell, neither the arguments nor the path
- * are parsed as a command. Rejects with GitNotFoundError when git is not on PATH. A git failure
+ * are parsed as a command. core.fsmonitor is turned off, so the repo's own config cannot run a
+ * program during the call. Rejects with GitNotFoundError when git is not on PATH. A git failure
  * rejects with the error from execFile, which carries stdout and stderr.
  */
 export async function runGit(
@@ -86,7 +87,7 @@ export async function runGit(
   options: { cwd: string; timeout?: number }
 ): Promise<{ stdout: string; stderr: string }> {
   const git = await requireGit()
-  return runCapture(git, args, options)
+  return runCapture(git, withSafeGitOptions(args), options)
 }
 
 /**

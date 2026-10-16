@@ -162,6 +162,7 @@ HELM's main process makes extensive use of `child_process.exec()` for system mon
 **What's good:**
 - `actions.ts` uses `execFile` (not `exec`), which is immune to shell injection
 - git is never started by its bare name. On Windows, a program started by bare name is searched for in the working directory before PATH, and the Fleet page runs git with each scanned repo as the working directory, so a `git.exe` planted at the top of a repo would run. `git-binary.ts` finds git once, searching PATH entries only: it never looks in the working directory, it skips every PATH entry that is not a full path (empty, `.`, `bin`), and on Windows it honors PATHEXT for `.exe` and `.com`. The absolute path is cached and used for every git call. If git is not found, the git monitors return empty results and a git action reports that git was not found
+- Every git call runs with `-c core.fsmonitor=false`. A repository can name a program in `core.fsmonitor` in its own `.git/config`, and git runs it during status, fetch, stash and other commands that refresh the index, so a repo copied from someone else could run code during the Fleet scan. The command-line setting wins over the repo config. This does not stop other settings in a repo's own config, such as a clean filter, from running during `git status`. HELM scans only the directories the user configures, to two levels deep
 
 ---
 

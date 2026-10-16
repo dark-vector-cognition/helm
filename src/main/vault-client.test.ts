@@ -8,7 +8,8 @@ const mockWriteFile = vi.fn()
 const mockRequireGit = vi.fn()
 const GIT = '/opt/tools/bin/git'
 
-vi.mock('./git-binary', () => ({
+vi.mock('./git-binary', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./git-binary')>()),
   requireGit: (...args: unknown[]) => mockRequireGit(...args)
 }))
 
@@ -294,14 +295,14 @@ describe('VaultClient', () => {
       expect(mockExecFile).toHaveBeenNthCalledWith(
         1,
         GIT,
-        ['-C', '/home/test/Documents/ai/obsidian-vault', 'add', '/home/test/Documents/ai/obsidian-vault/Inbox/Commit Me.md'],
+        ['-c', 'core.fsmonitor=false', '-C', '/home/test/Documents/ai/obsidian-vault', 'add', '/home/test/Documents/ai/obsidian-vault/Inbox/Commit Me.md'],
         expect.objectContaining({ timeout: 30000 }),
         expect.any(Function)
       )
       expect(mockExecFile).toHaveBeenNthCalledWith(
         2,
         GIT,
-        ['-C', '/home/test/Documents/ai/obsidian-vault', 'commit', '-m', 'HELM: add Commit Me', '--', '/home/test/Documents/ai/obsidian-vault/Inbox/Commit Me.md'],
+        ['-c', 'core.fsmonitor=false', '-C', '/home/test/Documents/ai/obsidian-vault', 'commit', '-m', 'HELM: add Commit Me', '--', '/home/test/Documents/ai/obsidian-vault/Inbox/Commit Me.md'],
         expect.objectContaining({ timeout: 30000 }),
         expect.any(Function)
       )
@@ -344,7 +345,7 @@ describe('VaultClient', () => {
 
       expect(mockExecFile).toHaveBeenCalledWith(
         GIT,
-        ['-C', '/home/test/Documents/ai/obsidian-vault', 'pull', '--ff-only'],
+        ['-c', 'core.fsmonitor=false', '-C', '/home/test/Documents/ai/obsidian-vault', 'pull', '--ff-only'],
         expect.objectContaining({ timeout: 60000 }),
         expect.any(Function)
       )
