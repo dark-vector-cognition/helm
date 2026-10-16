@@ -1,4 +1,5 @@
 import { execFile } from 'child_process'
+import { requireGit, withSafeGitOptions } from '../git-binary'
 
 /**
  * Safe command running for paths that come from config or the file system.
@@ -18,17 +19,34 @@ export function powerShellArgs(script: string): string[] {
   return ['-NoProfile', '-NonInteractive', '-Command', script]
 }
 
-function run(
+interface RunOptions {
+  timeout?: number
+  env?: NodeJS.ProcessEnv
+  cwd?: string
+}
+
+/**
+ * Run a program and capture its output. A failure rejects with the error from execFile plus the
+ * captured `stdout` and `stderr`. The callback form of execFile passes them as separate arguments
+ * and leaves them off the error, so without this the program's own explanation, for example git's
+ * "No stash entries found.", would be lost.
+ */
+function runCapture(
   file: string,
   args: string[],
-  options: { timeout?: number; env?: NodeJS.ProcessEnv }
-): Promise<string> {
+  options: RunOptions
+): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
-    execFile(file, args, { ...options, maxBuffer: 10 * 1024 * 1024 }, (error, stdout) => {
-      if (error) reject(error)
-      else resolve(String(stdout))
+    execFile(file, args, { ...options, maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
+      const captured = { stdout: String(stdout ?? ''), stderr: String(stderr ?? '') }
+      if (error) reject(Object.assign(error, captured))
+      else resolve(captured)
     })
   })
+}
+
+async function run(file: string, args: string[], options: RunOptions): Promise<string> {
+  return (await runCapture(file, args, options)).stdout
 }
 
 /**
@@ -48,17 +66,38 @@ export function runPowerShell(
   return run('powershell.exe', powerShellArgs(script), { timeout, env })
 }
 
-/** Run a program with separate arguments and no shell. */
-export function runFile(file: string, args: string[], timeout?: number): Promise<string> {
-  return run(file, args, { timeout })
+/** Run a program with separate arguments and no shell. `cwd` is the working directory. */
+export function runFile(
+  file: string,
+  args: string[],
+  options: { timeout?: number; cwd?: string } = {}
+): Promise<string> {
+  return run(file, args, options)
+}
+
+/**
+ * Run git in `cwd`. git is started by its absolute path, found on PATH only (see git-binary.ts),
+ * so a git.exe planted in the repo cannot run. With no shell, neither the arguments nor the path
+ * are parsed as a command. core.fsmonitor is turned off, so the repo's own config cannot run a
+ * program during the call. Rejects with GitNotFoundError when git is not on PATH. A git failure
+ * rejects with the error from execFile, which carries stdout and stderr.
+ */
+export async function runGit(
+  args: string[],
+  options: { cwd: string; timeout?: number }
+): Promise<{ stdout: string; stderr: string }> {
+  const git = await requireGit()
+  return runCapture(git, withSafeGitOptions(args), options)
 }
 
 /**
  * Expand a file pattern with the shell. The pattern is a positional argument ($1), so it is never
  * parsed as a command. IFS is emptied so a space in the pattern does not split it into several
- * words, while the wildcards still expand.
+ * words, while the wildcards still expand. `ls -d --` ends option parsing, so a match whose name
+ * starts with a dash is read as a file name and not as an option, and -d lists a matching
+ * directory by its own name instead of its contents.
  */
-export const SH_EXPAND_GLOB_SCRIPT = 'IFS=; ls $1 2>/dev/null || true'
+export const SH_EXPAND_GLOB_SCRIPT = 'IFS=; ls -d -- $1 2>/dev/null || true'
 
 /** Find .git directories up to two levels under `dir`. */
 export const POWERSHELL_FIND_GIT_SCRIPT =

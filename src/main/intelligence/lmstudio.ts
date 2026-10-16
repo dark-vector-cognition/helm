@@ -3,6 +3,7 @@ import { exec } from 'child_process'
 import { promisify } from 'util'
 import type { LmStudioHealResult, LmStudioProbeAttempt } from '../../shared/types'
 import { loadConfig, saveConfig } from '../config'
+import { envKeyWithEndpoint, normalizeEndpointUrl } from '../endpoint-url'
 
 const DEFAULT_LM_STUDIO_URL = 'http://localhost:1234'
 const LOOPBACK_LM_STUDIO_URL = 'http://127.0.0.1:1234'
@@ -14,57 +15,47 @@ const ARP_TIMEOUT_MS = 1500
 const execAsync = promisify(exec)
 
 function normalizeLmStudioUrl(rawUrl: string): string | null {
-  const trimmed = rawUrl.trim()
-  if (!trimmed) return null
-
-  try {
-    const parsed = new URL(trimmed)
-    parsed.hash = ''
-    parsed.search = ''
-
-    let pathname = parsed.pathname.replace(/\/+$/, '')
-    if (pathname.endsWith('/v1')) {
-      pathname = pathname.slice(0, -3)
-    }
-    parsed.pathname = pathname || ''
-
-    return parsed.toString().replace(/\/$/, '')
-  } catch {
-    return null
-  }
+  return normalizeEndpointUrl(rawUrl)
 }
 
 /**
- * Optional API key for hosted OpenAI-compatible endpoints. LLM_API_KEY in the
- * environment wins over `apiKey` in the config file. Never log the result.
+ * Optional API key for hosted OpenAI-compatible endpoints: LLM_API_KEY (only together with an
+ * LM_STUDIO_URL that parses as a URL, and it wins over the file), else `apiKey` from the config
+ * file. Never log the result.
  */
 export function resolveApiKey(config: { apiKey?: string }): string | undefined {
-  const fromEnv = process.env.LLM_API_KEY?.trim()
+  const fromEnv = envKeyWithEndpoint()?.key
   if (fromEnv) return fromEnv
   const fromConfig = typeof config.apiKey === 'string' ? config.apiKey.trim() : ''
   return fromConfig || undefined
 }
 
 /**
- * Headers for a request to `url`. With no key set, no Authorization header is sent.
- * With a key set, the header goes only to the endpoint the user configured, never to
- * a localhost, LAN or subnet candidate found by discovery, so the key cannot leak to
+ * Headers for a request to `url`. With no key that applies, no Authorization header is sent.
+ *
+ * - The environment key goes only to the endpoint named by LM_STUDIO_URL.
+ * - A config file key goes only to the configured endpoint (the saved URL or LM_STUDIO_URL).
+ *
+ * Never to a localhost, LAN or subnet candidate found by discovery, so a key cannot leak to
  * other machines.
  */
 export function buildAuthHeaders(
   url: string,
   config: { apiKey?: string; lmStudioUrl?: string } = loadConfig()
 ): Record<string, string> {
-  const key = resolveApiKey(config)
-  if (!key) return {}
-
   const target = normalizeLmStudioUrl(url)
   if (!target) return {}
+
+  const fromEnv = envKeyWithEndpoint()
+  if (fromEnv && fromEnv.url === target) return { Authorization: `Bearer ${fromEnv.key}` }
+
+  const fromConfig = typeof config.apiKey === 'string' ? config.apiKey.trim() : ''
+  if (!fromConfig) return {}
 
   const configured = [config.lmStudioUrl, process.env.LM_STUDIO_URL]
     .map((value) => normalizeLmStudioUrl(value || ''))
     .filter((value): value is string => Boolean(value))
-  return configured.includes(target) ? { Authorization: `Bearer ${key}` } : {}
+  return configured.includes(target) ? { Authorization: `Bearer ${fromConfig}` } : {}
 }
 
 function hasConfiguredEndpoint(configuredUrl: string | undefined): boolean {
