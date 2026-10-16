@@ -153,7 +153,7 @@ describe('detectAgents', () => {
     expect(agents[0].name).toBe('Gemini')
   })
 
-  it('does not detect Gemini Desktop as a council agent', () => {
+  it('does not detect Gemini Desktop as a standing agent', () => {
     const procs: ProcessInfo[] = [
       {
         pid: 9005,
