@@ -52,7 +52,7 @@ Helm Light: the open-source release.
 - Removed planning notes, the path audit, the wiki journal, and out-of-date screenshots from `docs/`
 
 ### Tests
-- 31 test files, 309 tests. New coverage for the Windows parsers, the no-model briefing path, the unconfigured endpoint probe, and the vault reindex guards
+- 36 test files, 380 tests. New coverage for the Windows parsers, the no-model briefing path, the unconfigured endpoint probe, the vault reindex guards, the API key rules, and running commands without a shell
 
 ## v4.0.2 - 2026-03-22
 
