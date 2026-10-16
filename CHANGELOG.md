@@ -13,7 +13,7 @@ Helm Light: the open-source release.
 ### First Run
 - HELM starts and every page renders with no model configured. AI briefings are optional
 - Any OpenAI-compatible server can be used for briefings, including LM Studio, Ollama, and llama.cpp
-- Optional API key for hosted OpenAI-compatible endpoints: set `apiKey` in `~/.config/helm/config.json` or `LLM_API_KEY` in the environment (the environment wins). The key is sent as `Authorization: Bearer <key>` only to the configured endpoint. With no key set, no Authorization header is sent. A save that changes `lmStudioUrl` without a new key deletes the stored key
+- Optional API key for hosted OpenAI-compatible endpoints: set `apiKey` in `~/.config/helm/config.json`, or set `LLM_API_KEY` together with `LM_STUDIO_URL` in the environment (the environment pair wins, and `LLM_API_KEY` alone is ignored). The key is sent as `Authorization: Bearer <key>` only to the configured endpoint. With no key set, no Authorization header is sent. A save that changes `lmStudioUrl` without a new key deletes the stored key
 - The key never reaches the UI process. The settings API returns the config with `apiKey` as an empty string plus a `hasApiKey` flag, saves keep the stored key unless a new non-empty key is sent, and a separate clear action removes it
 - With no endpoint configured, `Request Briefing` shows a calm "No model configured" state instead of an offline warning, and only checks this machine on the default port. The network is never scanned unless an endpoint was configured
 - `.env.example` no longer sets a model endpoint by default

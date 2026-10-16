@@ -342,6 +342,7 @@ describe('API key handling across IPC', () => {
 
   it('getRedactedConfig never returns an environment key either', async () => {
     process.env.LLM_API_KEY = 'env-secret-key-456'
+    process.env.LM_STUDIO_URL = 'https://api.example.com/v1'
     const { getRedactedConfig } = await import('./config')
 
     const redacted = getRedactedConfig()
@@ -349,6 +350,27 @@ describe('API key handling across IPC', () => {
     expect(redacted.apiKey).toBe('')
     expect(redacted.hasApiKey).toBe(true)
     expect(JSON.stringify(redacted)).not.toContain('env-secret-key-456')
+  })
+
+  it('does not count an environment key that has no LM_STUDIO_URL next to it', async () => {
+    // The key would be ignored by the model client, so the UI must not claim a key is in effect.
+    process.env.LLM_API_KEY = 'env-secret-key-456'
+    writeStored({ lmStudioUrl: 'https://api.example.com/v1' })
+    const { getRedactedConfig } = await import('./config')
+
+    const redacted = getRedactedConfig()
+
+    expect(redacted.hasApiKey).toBe(false)
+    expect(redacted.apiKey).toBe('')
+    expect(JSON.stringify(redacted)).not.toContain('env-secret-key-456')
+  })
+
+  it('still counts a stored key when an unpaired environment key is also set', async () => {
+    process.env.LLM_API_KEY = 'env-secret-key-456'
+    writeStored({ lmStudioUrl: 'https://api.example.com/v1', apiKey: STORED_KEY })
+    const { getRedactedConfig } = await import('./config')
+
+    expect(getRedactedConfig().hasApiKey).toBe(true)
   })
 
   it('reports no key and an empty string when none is set', async () => {
@@ -436,6 +458,7 @@ describe('API key handling across IPC', () => {
 
   it('never writes an environment key to the config file', async () => {
     process.env.LLM_API_KEY = 'env-secret-key-456'
+    process.env.LM_STUDIO_URL = 'https://api.example.com/v1'
     const { getRedactedConfig, saveConfig, clearStoredApiKey } = await import('./config')
 
     saveConfig(getRedactedConfig())
@@ -555,6 +578,7 @@ describe('API key is bound to its endpoint', () => {
   it('does not touch a key set only through the environment', async () => {
     writeStored({ lmStudioUrl: HOST_A })
     process.env.LLM_API_KEY = 'env-key'
+    process.env.LM_STUDIO_URL = HOST_A
     const { getRedactedConfig, saveConfig } = await import('./config')
 
     saveConfig({ ...getRedactedConfig(), lmStudioUrl: HOST_B })
