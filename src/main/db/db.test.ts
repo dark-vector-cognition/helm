@@ -270,7 +270,7 @@ describe('SQLite persistence', () => {
         timestamp: 1700000000000,
         type: 'agent_action',
         source: 'botbotfromuk-v1',
-        message: 'botbotfromuk-v1 [t17] post comment via github_api -> kunalnano/hydra#11',
+        message: 'botbotfromuk-v1 [t17] post comment via github_api -> example-org/sample-repo#11',
         metadata: JSON.stringify({ tick: 17, eventType: 'external_action' })
       })
 

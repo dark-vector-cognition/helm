@@ -58,7 +58,7 @@ describe('spawner', () => {
 
 describe('tmux output parsing', () => {
   it('parses window list format correctly', () => {
-    const output = 'architect-abc123|12345|/Users/test/project\nbuilder-def456|12346|/Users/test/other'
+    const output = 'architect-abc123|12345|/home/test/project\nbuilder-def456|12346|/home/test/other'
     const lines = output.trim().split('\n')
     const parsed = lines.map((line) => {
       const [name, pid, cwd] = line.split('|')
@@ -66,8 +66,8 @@ describe('tmux output parsing', () => {
     })
 
     expect(parsed).toHaveLength(2)
-    expect(parsed[0]).toEqual({ name: 'architect-abc123', pid: 12345, cwd: '/Users/test/project' })
-    expect(parsed[1]).toEqual({ name: 'builder-def456', pid: 12346, cwd: '/Users/test/other' })
+    expect(parsed[0]).toEqual({ name: 'architect-abc123', pid: 12345, cwd: '/home/test/project' })
+    expect(parsed[1]).toEqual({ name: 'builder-def456', pid: 12346, cwd: '/home/test/other' })
   })
 
   it('handles empty output', () => {

@@ -9,7 +9,7 @@ import type { HelmConfig } from '../shared/types'
 
 const TEST_VAULT_DEFAULTS = {
   vaultRagEndpoint: 'http://127.0.0.1:8742',
-  vaultPath: '/Users/test/Documents/ai/obsidian-vault',
+  vaultPath: '/home/test/Documents/ai/obsidian-vault',
   vaultRagLocation: 'local' as const,
   vaultRagRemoteHost: '',
   vaultRagAutoCheck: true
@@ -54,7 +54,7 @@ describe('config JSON serialization', () => {
   let tmpDir: string
 
   beforeEach(() => {
-    tmpDir = mkdtempSync(join(tmpdir(), 'hydra-config-test-'))
+    tmpDir = mkdtempSync(join(tmpdir(), 'helm-config-test-'))
   })
 
   afterEach(() => {
@@ -64,7 +64,7 @@ describe('config JSON serialization', () => {
   it('writes and reads config as JSON', () => {
     const config: HelmConfig = {
       apiKey: 'sk-test',
-      gitRepoPaths: ['/Users/test/repo1'],
+      gitRepoPaths: ['/home/test/repo1'],
       monitorInterval: 3000,
       snapshotInterval: 60000,
       staffBinPath: '/usr/local/bin/staff',
@@ -83,7 +83,7 @@ describe('config JSON serialization', () => {
     const raw = readFileSync(configPath, 'utf-8')
     const parsed = JSON.parse(raw)
     expect(parsed.apiKey).toBe('sk-test')
-    expect(parsed.gitRepoPaths).toEqual(['/Users/test/repo1'])
+    expect(parsed.gitRepoPaths).toEqual(['/home/test/repo1'])
     expect(parsed.monitorInterval).toBe(3000)
     expect(parsed.snapshotInterval).toBe(60000)
     expect(parsed.staffBinPath).toBe('/usr/local/bin/staff')
@@ -141,7 +141,7 @@ describe('ensureConfigDir', () => {
   let tmpDir: string
 
   beforeEach(() => {
-    tmpDir = mkdtempSync(join(tmpdir(), 'hydra-config-dir-test-'))
+    tmpDir = mkdtempSync(join(tmpdir(), 'helm-config-dir-test-'))
   })
 
   afterEach(() => {

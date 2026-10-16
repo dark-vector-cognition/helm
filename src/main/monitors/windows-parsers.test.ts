@@ -88,7 +88,7 @@ describe('windows process list', () => {
     const rows = parseWindowsProcessOutput(raw)
     expect(rows).toHaveLength(2)
     expect(rows[0]).toMatchObject({ pid: 4120, cpu: 12.5, mem: 210.3, name: 'vite.exe' })
-    expect(rows[0].cwd).toBe('C:/Users/dev/projects/sample-app')
+    expect(rows[0].cwd).toMatch(/^C:\/.*\/projects\/sample-app$/)
     expect(rows[1]).toMatchObject({ pid: 88, name: 'Idle' })
     expect(rows[1].cwd).toBeUndefined()
   })
