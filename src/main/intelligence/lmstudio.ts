@@ -5,6 +5,10 @@ import type { LmStudioHealResult, LmStudioProbeAttempt } from '../../shared/type
 import { loadConfig, saveConfig } from '../config'
 
 const DEFAULT_LM_STUDIO_URL = 'http://localhost:1234'
+const LOOPBACK_LM_STUDIO_URL = 'http://127.0.0.1:1234'
+
+export const NO_MODEL_MESSAGE =
+  'No model configured. HELM works without one. To turn on AI briefings, set LM_STUDIO_URL to any OpenAI-compatible server.'
 const MODEL_DISCOVERY_TIMEOUT_MS = 1500
 const ARP_TIMEOUT_MS = 1500
 const execAsync = promisify(exec)
@@ -28,6 +32,43 @@ function normalizeLmStudioUrl(rawUrl: string): string | null {
   } catch {
     return null
   }
+}
+
+/**
+ * Optional API key for hosted OpenAI-compatible endpoints. LLM_API_KEY in the
+ * environment wins over `apiKey` in the config file. Never log the result.
+ */
+export function resolveApiKey(config: { apiKey?: string }): string | undefined {
+  const fromEnv = process.env.LLM_API_KEY?.trim()
+  if (fromEnv) return fromEnv
+  const fromConfig = typeof config.apiKey === 'string' ? config.apiKey.trim() : ''
+  return fromConfig || undefined
+}
+
+/**
+ * Headers for a request to `url`. With no key set, no Authorization header is sent.
+ * With a key set, the header goes only to the endpoint the user configured, never to
+ * a localhost, LAN or subnet candidate found by discovery, so the key cannot leak to
+ * other machines.
+ */
+export function buildAuthHeaders(
+  url: string,
+  config: { apiKey?: string; lmStudioUrl?: string } = loadConfig()
+): Record<string, string> {
+  const key = resolveApiKey(config)
+  if (!key) return {}
+
+  const target = normalizeLmStudioUrl(url)
+  if (!target) return {}
+
+  const configured = [config.lmStudioUrl, process.env.LM_STUDIO_URL]
+    .map((value) => normalizeLmStudioUrl(value || ''))
+    .filter((value): value is string => Boolean(value))
+  return configured.includes(target) ? { Authorization: `Bearer ${key}` } : {}
+}
+
+function hasConfiguredEndpoint(configuredUrl: string | undefined): boolean {
+  return Boolean((configuredUrl || '').trim() || (process.env.LM_STUDIO_URL || '').trim())
 }
 
 export function isLmStudioConnectivityError(message: string): boolean {
@@ -122,11 +163,23 @@ async function buildCandidateUrls(): Promise<{ priority: string[]; subnet: strin
   const configured = normalizeLmStudioUrl(config.lmStudioUrl || '')
   const envUrl = normalizeLmStudioUrl(process.env.LM_STUDIO_URL || '')
 
+  if (!hasConfiguredEndpoint(config.lmStudioUrl)) {
+    // No model configured: only look on this machine. Never probe the LAN unprompted.
+    return { priority: [DEFAULT_LM_STUDIO_URL, LOOPBACK_LM_STUDIO_URL], subnet: [] }
+  }
+
+  if (resolveApiKey(config)) {
+    // A key means an explicit, authenticated endpoint. Never fall back to discovered hosts:
+    // they cannot use the key, and a repair must not replace the user's hosted URL.
+    const explicit = [configured, envUrl].filter((value): value is string => Boolean(value))
+    return { priority: [...new Set(explicit)], subnet: [] }
+  }
+
   const priority = [
     configured,
     envUrl,
     DEFAULT_LM_STUDIO_URL,
-    'http://127.0.0.1:1234'
+    LOOPBACK_LM_STUDIO_URL
   ].filter((value): value is string => Boolean(value))
 
   for (const ip of getLocalIPv4s()) {
@@ -151,14 +204,15 @@ async function buildCandidateUrls(): Promise<{ priority: string[]; subnet: strin
 async function fetchWithTimeout(
   fetchImpl: typeof fetch,
   url: string,
-  timeoutMs: number
+  timeoutMs: number,
+  headers: Record<string, string>
 ): Promise<Response> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), timeoutMs)
 
   try {
     return await fetchImpl(url, {
-      headers: { Authorization: 'Bearer lm-studio' },
+      headers,
       signal: controller.signal
     })
   } finally {
@@ -169,7 +223,8 @@ async function fetchWithTimeout(
 export async function probeLmStudioEndpoint(
   baseUrl: string,
   fetchImpl: typeof fetch = fetch,
-  timeoutMs = MODEL_DISCOVERY_TIMEOUT_MS
+  timeoutMs = MODEL_DISCOVERY_TIMEOUT_MS,
+  headers: Record<string, string> = {}
 ): Promise<LmStudioProbeAttempt> {
   const normalized = normalizeLmStudioUrl(baseUrl)
   if (!normalized) {
@@ -180,7 +235,8 @@ export async function probeLmStudioEndpoint(
     const response = await fetchWithTimeout(
       fetchImpl,
       `${normalized}/v1/models`,
-      timeoutMs
+      timeoutMs,
+      headers
     )
 
     if (!response.ok) {
@@ -239,13 +295,19 @@ export async function healLmStudioConnection(options?: {
   const fetchImpl = options?.fetchImpl || fetch
   const config = loadConfig()
   const configuredValue = (config.lmStudioUrl || process.env.LM_STUDIO_URL || '').trim()
+  const configured = hasConfiguredEndpoint(config.lmStudioUrl)
   const previousUrl = normalizeLmStudioUrl(configuredValue)
   const previousLabel = previousUrl || configuredValue || undefined
   const attempts: LmStudioProbeAttempt[] = []
 
   const { priority, subnet } = await buildCandidateUrls()
   for (const candidate of priority) {
-    const probe = await probeLmStudioEndpoint(candidate, fetchImpl)
+    const probe = await probeLmStudioEndpoint(
+      candidate,
+      fetchImpl,
+      MODEL_DISCOVERY_TIMEOUT_MS,
+      buildAuthHeaders(candidate, config)
+    )
     attempts.push(probe)
 
     if (!probe.ok) continue
@@ -258,6 +320,7 @@ export async function healLmStudioConnection(options?: {
     return {
       success: true,
       repaired,
+      configured,
       message: repaired
         ? `LM Studio endpoint repaired: ${previousLabel} -> ${probe.url}`
         : `LM Studio reachable at ${probe.url}`,
@@ -281,6 +344,7 @@ export async function healLmStudioConnection(options?: {
       return {
         success: true,
         repaired,
+        configured,
         message: repaired
           ? `LM Studio endpoint repaired: ${previousLabel} -> ${subnetScan.success.url}`
           : `LM Studio reachable at ${subnetScan.success.url}`,
@@ -292,6 +356,10 @@ export async function healLmStudioConnection(options?: {
     }
   }
 
+  if (!configured) {
+    return { success: false, repaired: false, configured, message: NO_MODEL_MESSAGE, attempts }
+  }
+
   const attemptedUrls = attempts.map((attempt) => attempt.url).join(', ')
   const remoteHint =
     previousLabel && /^https?:\/\/(?!localhost|127\.0\.0\.1)/.test(previousLabel)
@@ -301,6 +369,7 @@ export async function healLmStudioConnection(options?: {
   return {
     success: false,
     repaired: false,
+    configured,
     message: attemptedUrls
       ? `LM Studio is unreachable. Checked ${attemptedUrls}.${remoteHint}`
       : `LM Studio is unreachable.${remoteHint}`,

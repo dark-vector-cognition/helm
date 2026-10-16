@@ -7,8 +7,7 @@ const BUILT_IN_ROLES: { name: HiveRoleName; displayName: string; model: HiveMode
   { name: 'architect', displayName: 'Architect', model: 'opus', description: 'System design and planning' },
   { name: 'builder', displayName: 'Builder', model: 'sonnet', description: 'Implementation and code' },
   { name: 'analyst', displayName: 'Analyst', model: 'sonnet', description: 'Research and data analysis' },
-  { name: 'ops', displayName: 'Ops', model: 'sonnet', description: 'Infrastructure and automation' },
-  { name: 'strategist', displayName: 'Strategist', model: 'opus', description: 'Business strategy' }
+  { name: 'ops', displayName: 'Ops', model: 'sonnet', description: 'Infrastructure and automation' }
 ]
 
 const MODEL_OPTIONS: HiveModel[] = ['opus', 'sonnet', 'haiku']
@@ -17,8 +16,7 @@ const ROLE_COLORS: Record<string, string> = {
   architect: 'text-violet-400',
   builder: 'text-emerald-400',
   analyst: 'text-blue-400',
-  ops: 'text-orange-400',
-  strategist: 'text-rose-400'
+  ops: 'text-orange-400'
 }
 
 export function HiveLauncher(): JSX.Element {

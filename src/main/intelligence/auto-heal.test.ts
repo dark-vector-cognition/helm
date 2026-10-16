@@ -51,7 +51,7 @@ describe('evaluateRules', () => {
       state: makeState({ cpu: { usage: 50, cores: 10 } }),
       timestamp: Date.now() - 5000
     }
-    const current = makeState({ cpu: { usage: 92, cores: 10 } })
+    const current = makeState({ cpu: { usage: 97, cores: 10 } })
 
     const events = evaluateRules(current, prev, DEFAULT_RULES)
     const cpuEvent = events.find((e) => e.rule === 'high_cpu')
@@ -65,7 +65,7 @@ describe('evaluateRules', () => {
       timestamp: Date.now() - 5000
     }
     const current = makeState({
-      memory: { total: 32e9, used: 30e9, free: 2e9, usagePercent: 93 }
+      memory: { total: 32e9, used: 31e9, free: 1e9, usagePercent: 97 }
     })
 
     const events = evaluateRules(current, prev, DEFAULT_RULES)
@@ -218,10 +218,10 @@ describe('checkRamClimbRate', () => {
     for (let i = 0; i < 10; i++) {
       checkRamClimbRate(50)
     }
-    // Now jump to 70% — climb of 20%
-    const result = checkRamClimbRate(70)
+    // Now jump to 75% - climb of 25% (above 20% threshold)
+    const result = checkRamClimbRate(75)
     expect(result).not.toBeNull()
-    expect(result!).toBeCloseTo(20, 0)
+    expect(result!).toBeCloseTo(25, 0)
   })
 
   it('returns null when climb is below threshold', () => {
@@ -229,7 +229,7 @@ describe('checkRamClimbRate', () => {
     for (let i = 0; i < 10; i++) {
       checkRamClimbRate(50)
     }
-    // Small jump to 55% — climb of 5%, below 15% threshold
+    // Small jump to 55% - climb of 5%, below 15% threshold
     const result = checkRamClimbRate(55)
     expect(result).toBeNull()
   })

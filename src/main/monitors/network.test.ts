@@ -188,9 +188,9 @@ tcp6 fe80::34:22a0:91cd:80e2%en8.50160<->fe80::188e:de3f:efcc:f519%en8.49158,Est
 describe('parseNetstatOutput', () => {
   const SAMPLE_NETSTAT = `Name       Mtu   Network       Address            Ipkts Ierrs     Ibytes    Opkts Oerrs     Obytes  Coll
 lo0        16384 <Link#1>                       1281901     0  349772063  1281901     0  349772063     0
-en0        1500  <Link#14>   0a:cd:f8:ab:e7:42  1429100     0 1446262099   511318     0  191414496     0
+en0        1500  <Link#14>   aa:bb:cc:dd:ee:01  1429100     0 1446262099   511318     0  191414496     0
 en0        1500  10.0.0/24  10.0.0.1    1429100     - 1446262099   511318     -  191414496     -
-awdl0      1500  <Link#16>   ea:3e:5f:ef:c9:a9     6989     0    6467975     4276     0    1252756     0
+awdl0      1500  <Link#16>   aa:bb:cc:dd:ee:02     6989     0    6467975     4276     0    1252756     0
 gif0*      1280  <Link#2>                             0     0          0        0     0          0     0`
 
   it('parses active interfaces from netstat -ib', () => {

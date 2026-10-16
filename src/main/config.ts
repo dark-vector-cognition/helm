@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync, copyFileSync } from
 import { join } from 'path'
 import { homedir } from 'os'
 import type { HelmConfig } from '../shared/types'
-import type { HiveConfig, YenneferStyle } from '../shared/types'
+import type { HiveConfig } from '../shared/types'
 import {
   loadEnvironment,
   resolveCommandOrPathSetting,
@@ -17,20 +17,12 @@ const DEFAULT_CONFIG: HelmConfig = {
   gitRepoPaths: [],
   monitorInterval: 2000,
   snapshotInterval: 30000,
-  yenneferStyle: 'adaptive',
   vaultRagEndpoint: 'http://127.0.0.1:8742',
   vaultPath: join(homedir(), 'Documents', 'ai', 'obsidian-vault'),
   vaultRagLocation: 'local',
   vaultRagRemoteHost: '',
   vaultRagAutoCheck: true
 }
-
-const VALID_YENNEFER_STYLES = new Set<YenneferStyle>([
-  'adaptive',
-  'throughput',
-  'creative',
-  'strict'
-])
 
 export function getConfigPath(): string {
   return join(CONFIG_DIR, CONFIG_FILE)
@@ -100,14 +92,8 @@ function applyEnvOverrides(config: HelmConfig): HelmConfig {
   const envGitRepoPaths = parseListEnv('HELM_GIT_REPO_PATHS')
   const envAgentFeedPaths = parseListEnv('HELM_AGENT_FEED_PATHS')
   const envLogFilePaths = parseListEnv('HELM_LOG_FILE_PATHS')
-  const envStaffBinPath = parseCommandOrPathEnv('HELM_STAFF_BIN_PATH')
-  const envNetworkTarget = process.env.HELM_NETWORK_TARGET?.trim()
   const envMonitorInterval = parsePositiveIntEnv('HELM_MONITOR_INTERVAL_MS')
   const envSnapshotInterval = parsePositiveIntEnv('HELM_SNAPSHOT_INTERVAL_MS')
-  const envYenneferEnabled = parseBooleanEnv('HELM_YENNEFER_ENABLED')
-  const envYenneferStyle = process.env.HELM_YENNEFER_STYLE?.trim() as
-    | YenneferStyle
-    | undefined
   const envHiveEnabled = parseBooleanEnv('HELM_HIVE_ENABLED')
   const envHiveSharedContextPath = parsePathEnv('HELM_HIVE_SHARED_CONTEXT_PATH')
   const envHiveSessionPrefix = process.env.HELM_HIVE_SESSION_PREFIX?.trim()
@@ -120,14 +106,8 @@ function applyEnvOverrides(config: HelmConfig): HelmConfig {
   if (envGitRepoPaths) nextConfig.gitRepoPaths = envGitRepoPaths
   if (envAgentFeedPaths) nextConfig.agentFeedPaths = envAgentFeedPaths
   if (envLogFilePaths) nextConfig.logFilePaths = envLogFilePaths
-  if (envStaffBinPath) nextConfig.staffBinPath = envStaffBinPath
-  if (envNetworkTarget) nextConfig.networkTarget = envNetworkTarget
   if (envMonitorInterval) nextConfig.monitorInterval = envMonitorInterval
   if (envSnapshotInterval) nextConfig.snapshotInterval = envSnapshotInterval
-  if (envYenneferEnabled !== undefined) nextConfig.yenneferEnabled = envYenneferEnabled
-  if (envYenneferStyle && VALID_YENNEFER_STYLES.has(envYenneferStyle)) {
-    nextConfig.yenneferStyle = envYenneferStyle
-  }
 
   if (
     envHiveEnabled !== undefined ||
@@ -170,8 +150,94 @@ export function loadConfig(): HelmConfig {
   return applyEnvOverrides(config)
 }
 
-export function saveConfig(config: HelmConfig): void {
+/** The config file as stored on disk, without env overrides or defaults. Empty when missing or unreadable. */
+function readStoredConfig(): Partial<HelmConfig> {
+  try {
+    const configPath = getConfigPath()
+    if (!existsSync(configPath)) return {}
+    const parsed = JSON.parse(readFileSync(configPath, 'utf-8'))
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+function cleanApiKey(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+/**
+ * Reduce an endpoint URL to what identifies the host: no trailing slash, no /v1, no query or
+ * hash, and a lower-case scheme and host. Two spellings of the same endpoint compare equal.
+ */
+function normalizeEndpoint(raw: unknown): string {
+  const trimmed = typeof raw === 'string' ? raw.trim() : ''
+  if (!trimmed) return ''
+  try {
+    const url = new URL(trimmed)
+    url.hash = ''
+    url.search = ''
+    let pathname = url.pathname.replace(/\/+$/, '')
+    if (pathname.endsWith('/v1')) pathname = pathname.slice(0, -3)
+    url.pathname = pathname || ''
+    return url.toString().replace(/\/$/, '')
+  } catch {
+    return trimmed.toLowerCase()
+  }
+}
+
+function writeConfigFile(config: Partial<HelmConfig>): void {
   ensureConfigDir()
-  const configPath = getConfigPath()
-  writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8')
+  writeFileSync(getConfigPath(), JSON.stringify(config, null, 2), 'utf-8')
+}
+
+/**
+ * The config as the renderer may see it. The raw API key never leaves the main process:
+ * `apiKey` is always an empty string, and `hasApiKey` says whether a key is in effect
+ * (stored in the config file or set as LLM_API_KEY).
+ */
+export function getRedactedConfig(): HelmConfig {
+  const config = loadConfig()
+  const hasApiKey = Boolean(cleanApiKey(config.apiKey) || process.env.LLM_API_KEY?.trim())
+  return { ...config, apiKey: '', hasApiKey }
+}
+
+/**
+ * Save the full config. The stored API key is kept when the incoming `apiKey` is empty or
+ * missing, so a renderer that round-trips the redacted config cannot erase it. It is replaced
+ * only by a new non-empty key. Use clearStoredApiKey to remove it.
+ *
+ * A key belongs to the endpoint it was saved for. When a save changes `lmStudioUrl` and carries
+ * no new key, the stored key is dropped, so it can never be sent to a different host. An
+ * unchanged URL means equal to the stored one or to the one in effect now (the value the
+ * renderer was shown, which includes an LM_STUDIO_URL override), ignoring a trailing slash or /v1.
+ */
+export function saveConfig(config: HelmConfig): void {
+  // hasApiKey is derived for the renderer and is never written to disk.
+  const { hasApiKey: _hasApiKey, ...rest } = config
+  const next: Partial<HelmConfig> = { ...rest }
+
+  const stored = readStoredConfig()
+  const incomingKey = cleanApiKey(config.apiKey)
+  const storedKey = cleanApiKey(stored.apiKey)
+
+  const incomingUrl = normalizeEndpoint(config.lmStudioUrl)
+  const urlChanged =
+    incomingUrl !== normalizeEndpoint(stored.lmStudioUrl) &&
+    incomingUrl !== normalizeEndpoint(loadConfig().lmStudioUrl)
+
+  const isNewKey = incomingKey !== '' && incomingKey !== storedKey
+  const key = isNewKey ? incomingKey : urlChanged ? '' : storedKey
+  if (key) next.apiKey = key
+  else delete next.apiKey
+
+  writeConfigFile(next)
+}
+
+/** Explicit clear: removes the stored API key. An LLM_API_KEY set in the environment is unaffected. */
+export function clearStoredApiKey(): void {
+  const stored = readStoredConfig()
+  if (!('apiKey' in stored)) return
+  delete stored.apiKey
+  writeConfigFile(stored)
 }

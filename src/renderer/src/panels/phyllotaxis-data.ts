@@ -22,7 +22,7 @@ export interface PhyllotaxisPoint {
 
 /**
  * Compute phyllotaxis positions for `count` points centered at (cx, cy).
- * `maxRadius` is the radius of the bounding circle — the scale factor
+ * `maxRadius` is the radius of the bounding circle - the scale factor
  * is derived so the outermost point lands just inside it.
  */
 export function computePhyllotaxisPoints(

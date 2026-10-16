@@ -73,7 +73,7 @@ export function CCUsagePanel(): JSX.Element {
     return (
       <div className="h-full flex flex-col items-center justify-center gap-3 text-center px-6">
         <div className="text-gray-500 text-xs leading-relaxed">
-          No Claude Code usage data yet. Hydra can read `~/.claude/stats-cache.json` and rescan raw session logs.
+          No Claude Code usage data yet. HELM can read `~/.claude/stats-cache.json` and rescan raw session logs.
         </div>
         <button
           onClick={() => {

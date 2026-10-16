@@ -2,6 +2,8 @@ import { exec } from 'child_process'
 import { promisify } from 'util'
 import { existsSync } from 'fs'
 import { join } from 'path'
+import { isWindows } from '../platform'
+import { POWERSHELL_FIND_GIT_SCRIPT, runFile, runPowerShell } from './shell-run'
 import type { GitRepoInfo, GitCommit, GitActionResult } from '../../shared/types'
 import { getAppRoot, loadEnvironment, resolvePathSetting } from '../app-paths'
 
@@ -72,7 +74,7 @@ async function getRepoInfo(repoPath: string): Promise<GitRepoInfo | null> {
 
     return {
       path: repoPath,
-      name: repoPath.split('/').pop() || repoPath,
+      name: repoPath.split(/[/\\]/).pop() || repoPath,
       branch,
       dirty,
       untracked,
@@ -92,12 +94,20 @@ export async function scanForRepos(scanDirs?: string[]): Promise<GitRepoInfo[]> 
 
   for (const dir of dirs) {
     try {
-      const { stdout } = await execAsync(`find "${dir}" -maxdepth 2 -name .git -type d 2>/dev/null`)
+      let stdout: string
+
+      if (isWindows()) {
+        // The directory reaches PowerShell as an environment variable, never inside the script.
+        stdout = await runPowerShell(POWERSHELL_FIND_GIT_SCRIPT, { DIR: dir }, 15000)
+      } else {
+        stdout = await runFile('find', [dir, '-maxdepth', '2', '-name', '.git', '-type', 'd'])
+      }
+
       const repoPaths = stdout
         .trim()
-        .split('\n')
+        .split(/\r?\n/)
         .filter((p) => p.length > 0)
-        .map((p) => p.replace(/\/.git$/, ''))
+        .map((p) => p.replace(/[/\\]\.git$/, ''))
       const results = await Promise.all(repoPaths.map(getRepoInfo))
       repos.push(...results.filter((r): r is GitRepoInfo => r !== null))
     } catch {
@@ -198,7 +208,7 @@ export async function getRepoCommitHistory(
   limit: number = 20
 ): Promise<GitCommit[]> {
   try {
-    const repoName = repoPath.split('/').pop() || repoPath
+    const repoName = repoPath.split(/[/\\]/).pop() || repoPath
     // limit is always a number from the app, repoPath comes from internal repo scanning
     const { stdout } = await execAsync(
       `git log --pretty=format:'%H|%an|%ae|%at|%s|%b§§§' -n ${limit}`,
@@ -214,7 +224,7 @@ const SAFE_GIT_ACTIONS = ['pull', 'push', 'stash', 'stash pop', 'fetch'] as cons
 
 /**
  * Execute a safe git action on a repo.
- * Only whitelisted commands are allowed — no arbitrary shell execution.
+ * Only whitelisted commands are allowed - no arbitrary shell execution.
  */
 export async function runGitAction(repoPath: string, action: string): Promise<GitActionResult> {
   if (!SAFE_GIT_ACTIONS.includes(action as (typeof SAFE_GIT_ACTIONS)[number])) {

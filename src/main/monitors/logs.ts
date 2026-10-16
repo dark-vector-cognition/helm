@@ -1,12 +1,15 @@
 import { watch, type FSWatcher } from 'fs'
 import { readFile, stat } from 'fs/promises'
 import { basename, join } from 'path'
-import { exec } from 'child_process'
-import { promisify } from 'util'
-import { tmpdir } from 'os'
+import { homedir, tmpdir } from 'os'
+import { isWindows } from '../platform'
+import {
+  POWERSHELL_EXPAND_GLOB_SCRIPT,
+  SH_EXPAND_GLOB_SCRIPT,
+  runFile,
+  runPowerShell
+} from './shell-run'
 import type { HelmConfig, LogLine } from '../../shared/types'
-
-const execAsync = promisify(exec)
 
 export type LogBatchKind = 'initial' | 'tail'
 type LogStreamCallback = (lines: LogLine[], kind: LogBatchKind) => void
@@ -110,12 +113,42 @@ async function watchLogFile(filePath: string): Promise<void> {
   watchedFiles.set(filePath, watched)
 }
 
+export async function expandGlobPattern(pattern: string): Promise<string[]> {
+  try {
+    let stdout: string
+
+    if (isWindows()) {
+      // The pattern reaches PowerShell as an environment variable, never inside the script text.
+      stdout = await runPowerShell(POWERSHELL_EXPAND_GLOB_SCRIPT, { PATTERN: pattern }, 5000)
+    } else {
+      stdout = await runFile('sh', ['-c', SH_EXPAND_GLOB_SCRIPT, 'sh', pattern])
+    }
+
+    return stdout
+      .trim()
+      .split(/\r?\n/)
+      .filter((f) => f.length > 0)
+  } catch {
+    return []
+  }
+}
+
 async function discoverLogFiles(config?: HelmConfig): Promise<string[]> {
-  const home = process.env.HOME || ''
-  const defaultPatterns = [
-    join(home, '.claude', 'projects', '*', 'logs', '*.log'),
-    join(tmpdir(), 'helm-*.log')
-  ]
+  const home = homedir()
+  const today = new Date().toISOString().split('T')[0]
+  const yearMonth = today.slice(0, 7)
+
+  const defaultPatterns = isWindows()
+    ? [
+        join(home, '.claude', 'projects', '*', 'logs', '*.log'),
+        join(tmpdir(), 'helm-*.log'),
+        join(home, '.lmstudio', 'server-logs', yearMonth, '*.log'),
+        join(home, 'AppData', 'Local', 'npm-cache', '_logs', '*.log')
+      ]
+    : [
+        join(home, '.claude', 'projects', '*', 'logs', '*.log'),
+        join(tmpdir(), 'helm-*.log')
+      ]
 
   const files: string[] = []
 
@@ -127,16 +160,8 @@ async function discoverLogFiles(config?: HelmConfig): Promise<string[]> {
   }
 
   for (const pattern of defaultPatterns) {
-    try {
-      const { stdout } = await execAsync(`ls ${pattern} 2>/dev/null || true`)
-      const found = stdout
-        .trim()
-        .split('\n')
-        .filter((f) => f.length > 0)
-      files.push(...found)
-    } catch {
-      // Pattern matched nothing
-    }
+    const found = await expandGlobPattern(pattern)
+    files.push(...found)
   }
 
   return [...new Set(files)]

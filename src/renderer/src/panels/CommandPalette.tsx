@@ -38,14 +38,14 @@ const PAGE_COMMANDS: {
   {
     page: 'grid',
     label: 'Open Grid',
-    aliases: ['grid', 'network', 'ports', 'security', 'systems', 'surface'],
-    description: 'Jump to network traffic, ports, and security posture'
+    aliases: ['grid', 'network', 'ports', 'traffic', 'systems', 'surface'],
+    description: 'Jump to network traffic and listening ports'
   },
   {
     page: 'ai',
     label: 'Open AI',
-    aliases: ['lm studio', 'briefing', 'yennefer', 'usage', 'cost'],
-    description: 'Jump to LM Studio control, briefings, and usage tracking'
+    aliases: ['lm studio', 'model', 'briefing', 'usage', 'cost'],
+    description: 'Jump to the model connection, briefings, and usage tracking'
   },
   {
     page: 'radio',
@@ -158,7 +158,7 @@ export function CommandPalette({
     })
 
     // HIVE commands
-    const hiveRoles = ['architect', 'builder', 'analyst', 'ops', 'strategist'] as const
+    const hiveRoles = ['architect', 'builder', 'analyst', 'ops'] as const
     for (const role of hiveRoles) {
       commands.push({
         id: `hive-launch-${role}`,

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useCallback } from 'react'
-import type { YenneferStyle, ProcessGroup, AgentInfo, PortInfo, GitRepoInfo } from '../../../shared/types'
+import type { ProcessGroup, AgentInfo, PortInfo, GitRepoInfo } from '../../../shared/types'
 import {
   type MechAntenna, type MechParams, type ArmorPlate, type CircuitNode,
   type EntityKind, type LatticeEntity,
@@ -20,10 +20,10 @@ const MODE_THEME: Record<AICoreMode, {
   label: string; detail: string; shell: string; border: string; text: string
   glowColor: { r: number; g: number; b: number }
 }> = {
-  idle:       { label: 'Hydra Awake', detail: 'The core is coherent and waiting for the next command.', shell: 'from-[#0a0800] via-[#0f0c04] to-[#050400]', border: 'border-amber-400/20', text: 'text-amber-200', glowColor: { r: 255, g: 210, b: 130 } },
-  thinking:   { label: 'Hydra Thinking', detail: 'Antennas extend as Yennefer resolves context.', shell: 'from-[#0c0a02] via-[#100e06] to-[#060500]', border: 'border-amber-300/24', text: 'text-amber-100', glowColor: { r: 255, g: 220, b: 150 } },
-  speaking:   { label: 'Yennefer Channel Open', detail: 'Inference resolved. The entity brightens with the answer.', shell: 'from-[#0e0c04] via-[#121008] to-[#070600]', border: 'border-yellow-300/22', text: 'text-yellow-100', glowColor: { r: 255, g: 240, b: 180 } },
-  repairing:  { label: 'Repair Cycle Active', detail: 'Testing paths and rebuilding the LM Studio route.', shell: 'from-[#0d0800] via-[#100a04] to-[#060400]', border: 'border-orange-400/24', text: 'text-orange-200', glowColor: { r: 245, g: 180, b: 80 } },
+  idle:       { label: 'HELM Awake', detail: 'The core is coherent and waiting for the next command.', shell: 'from-[#0a0800] via-[#0f0c04] to-[#050400]', border: 'border-amber-400/20', text: 'text-amber-200', glowColor: { r: 255, g: 210, b: 130 } },
+  thinking:   { label: 'HELM Thinking', detail: 'Antennas extend as the model resolves context.', shell: 'from-[#0c0a02] via-[#100e06] to-[#060500]', border: 'border-amber-300/24', text: 'text-amber-100', glowColor: { r: 255, g: 220, b: 150 } },
+  speaking:   { label: 'Briefing Ready', detail: 'Inference resolved. The entity brightens with the answer.', shell: 'from-[#0e0c04] via-[#121008] to-[#070600]', border: 'border-yellow-300/22', text: 'text-yellow-100', glowColor: { r: 255, g: 240, b: 180 } },
+  repairing:  { label: 'Repair Cycle Active', detail: 'Testing paths and rebuilding the model route.', shell: 'from-[#0d0800] via-[#100a04] to-[#060400]', border: 'border-orange-400/24', text: 'text-orange-200', glowColor: { r: 245, g: 180, b: 80 } },
   offline:    { label: 'Core Isolated', detail: 'The entity is alive but the inference line is down.', shell: 'from-[#080604] via-[#0a0806] to-[#040302]', border: 'border-yellow-700/20', text: 'text-yellow-600', glowColor: { r: 140, g: 110, b: 70 } },
   throughput: { label: 'Throughput Mode', detail: 'Entity saturated. Antennas at maximum extension.', shell: 'from-[#0c0a04] via-[#100e08] to-[#060500]', border: 'border-yellow-200/22', text: 'text-yellow-100', glowColor: { r: 255, g: 245, b: 210 } }
 }
@@ -36,10 +36,10 @@ const KIND_COLORS: Record<EntityKind, string> = {
 interface AICoreNodeProps {
   mode: AICoreMode; mono?: boolean; activeAgents: number; totalAgents: number
   cpuUsage: number; memoryUsage: number; listenerCount: number
-  yenneferStyle: YenneferStyle; lmStudioUrl: string; privacyMode?: boolean; disabled: boolean
+  lmStudioUrl: string; privacyMode?: boolean; disabled: boolean
   processes?: ProcessGroup[]; agents?: AgentInfo[]; ports?: PortInfo[]; gitRepos?: GitRepoInfo[]
-  onInvokeYennefer: () => void; onRequestBriefing: () => void; onRepair: () => void
-  onToggleMono?: () => void; onSetYenneferStyle?: (s: YenneferStyle) => void; lensDisabled?: boolean
+  onRequestBriefing: () => void; onRepair: () => void
+  onToggleMono?: () => void
 }
 
 function buildEntities(ps?: ProcessGroup[], ag?: AgentInfo[], po?: PortInfo[], gr?: GitRepoInfo[]): LatticeEntity[] {
@@ -50,8 +50,6 @@ function buildEntities(ps?: ProcessGroup[], ag?: AgentInfo[], po?: PortInfo[], g
   if (gr) for (const r of gr) e.push({ kind: 'git', name: r.name, activity: r.dirty ? 0.7 : r.ahead > 0 ? 0.5 : 0.25 })
   return e
 }
-
-function titleCase(v: string): string { return v[0].toUpperCase() + v.slice(1) }
 
 function MetricPill({ label, value, emphasis = false }: { label: string; value: string; emphasis?: boolean }): JSX.Element {
   return (
@@ -295,9 +293,9 @@ function renderFrame(ctx: CanvasRenderingContext2D, w: number, h: number, time: 
 
 export function AICoreNode({
   mode, mono = false, activeAgents, totalAgents, cpuUsage, memoryUsage, listenerCount,
-  yenneferStyle, lmStudioUrl, privacyMode = false, disabled,
+  lmStudioUrl, privacyMode = false, disabled,
   processes, agents, ports, gitRepos,
-  onInvokeYennefer, onRequestBriefing, onRepair, onToggleMono, onSetYenneferStyle, lensDisabled = false
+  onRequestBriefing, onRepair, onToggleMono
 }: AICoreNodeProps): JSX.Element {
   const theme = MODE_THEME[mode]
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -415,7 +413,7 @@ export function AICoreNode({
             <div ref={containerRef} onPointerMove={handlePointerMove} onPointerLeave={handlePointerLeave}
               className="relative mx-auto w-full max-w-[980px] transition-transform duration-200 ease-out"
               style={{ aspectRatio: '2 / 1', transform: 'perspective(1400px) rotateX(0deg) rotateY(0deg) scale(1)' }}>
-              <div onClick={disabled ? undefined : onInvokeYennefer} role="button" tabIndex={disabled ? -1 : 0}
+              <div onClick={disabled ? undefined : onRequestBriefing} role="button" tabIndex={disabled ? -1 : 0}
                 className={`group absolute inset-0 overflow-hidden rounded-[4px] border border-white/8 bg-black transition-all ${disabled ? 'cursor-not-allowed opacity-80' : 'cursor-pointer hover:border-white/16'}`}>
                 <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
               </div>
@@ -457,10 +455,6 @@ export function AICoreNode({
                       </button>
                     )}
                     <div className="rounded-[2px] border border-white/10 bg-black/70 px-2 py-0.5 text-[8px] uppercase tracking-[0.14em] text-gray-400 font-[family-name:var(--helm-font-mono)]">live</div>
-                    <div className="flex items-center gap-1.5 rounded-[2px] border border-white/10 bg-black/70 px-2 py-0.5">
-                      <span className={`h-1.5 w-1.5 rounded-[1px] ${theme.text} bg-current shadow-[0_0_8px_currentColor]`} />
-                      <span className={`text-[8px] uppercase tracking-[0.12em] font-[family-name:var(--helm-font-mono)] ${theme.text}`}>{titleCase(yenneferStyle)}</span>
-                    </div>
                   </div>
                 </div>
               </div>
@@ -472,25 +466,12 @@ export function AICoreNode({
           <div className="grid gap-4 xl:grid-cols-[minmax(0,0.62fr)_minmax(0,0.95fr)_minmax(0,0.72fr)]">
             <div>
               <div className="text-[10px] uppercase tracking-[0.16em] text-gray-500 font-[family-name:var(--helm-font-mono)]">Interface</div>
-              <div className="mt-1 text-sm font-semibold text-gray-100 font-[family-name:var(--helm-font-mono)]">{titleCase(yenneferStyle)} Lens</div>
+              <div className="mt-1 text-sm font-semibold text-gray-100 font-[family-name:var(--helm-font-mono)]">Local Model</div>
               <div className="mt-1 truncate text-xs text-gray-500 font-[family-name:var(--helm-font-mono)]" title={lmStudioUrl}>{endpoint}</div>
               {privacyMode && (
                 <div className="mt-2 inline-flex items-center gap-1 rounded-[2px] border border-emerald-300/20 bg-emerald-500/10 px-2 py-1 text-[9px] uppercase tracking-[0.18em] text-emerald-100 font-[family-name:var(--helm-font-mono)]">
                   <span className="h-1.5 w-1.5 rounded-[1px] bg-emerald-300 shadow-[0_0_6px_rgba(110,231,183,0.85)]" />
                   Secure View
-                </div>
-              )}
-              {onSetYenneferStyle && (
-                <div className="mt-3">
-                  <label className="block text-[10px] uppercase tracking-[0.16em] text-gray-500 font-[family-name:var(--helm-font-mono)]">Lens Control</label>
-                  <select value={yenneferStyle} disabled={lensDisabled}
-                    onChange={(e) => onSetYenneferStyle(e.target.value as YenneferStyle)}
-                    className="mt-2 w-full rounded-[4px] border border-white/10 bg-black/30 px-3 py-2 text-xs text-gray-200 font-[family-name:var(--helm-font-mono)] transition-colors disabled:cursor-not-allowed disabled:text-gray-500">
-                    <option value="adaptive">Adaptive</option>
-                    <option value="throughput">Throughput</option>
-                    <option value="creative">Creative</option>
-                    <option value="strict">Strict</option>
-                  </select>
                 </div>
               )}
             </div>
@@ -510,10 +491,9 @@ export function AICoreNode({
       </div>
 
       <div className="rounded-[4px] border border-white/10 bg-black/25 p-3">
-        <div className="grid gap-2 lg:grid-cols-3">
+        <div className="grid gap-2 lg:grid-cols-2">
           <ActionNode label="Request Briefing" detail="Run the structured ops pass." accent="bg-amber-700/20 text-amber-200 hover:bg-amber-600/25" disabled={disabled} onClick={onRequestBriefing} />
-          <ActionNode label="Invoke Repair" detail="Probe and rebuild the LM Studio path." accent="bg-amber-700/20 text-amber-100 hover:bg-amber-600/25" disabled={disabled} onClick={onRepair} />
-          <ActionNode label="Invoke Yennefer" detail="Open the channel through the entity." accent="bg-amber-700/20 text-amber-100 hover:bg-amber-600/25" disabled={disabled} onClick={onInvokeYennefer} />
+          <ActionNode label="Invoke Repair" detail="Probe and rebuild the model connection." accent="bg-amber-700/20 text-amber-100 hover:bg-amber-600/25" disabled={disabled} onClick={onRepair} />
         </div>
       </div>
     </div>

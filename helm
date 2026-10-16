@@ -2,8 +2,8 @@
 set -euo pipefail
 
 SCRIPT="$(readlink "$0" 2>/dev/null || echo "$0")"
-HYDRA_DIR="$(cd "$(dirname "$SCRIPT")" && pwd)"
-cd "$HYDRA_DIR"
+HELM_DIR="$(cd "$(dirname "$SCRIPT")" && pwd)"
+cd "$HELM_DIR"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -14,15 +14,15 @@ DIM='\033[2m'
 RESET='\033[0m'
 
 usage() {
-  echo -e "${BOLD}HYDRA${RESET} — Mission Control CLI"
+  echo -e "${BOLD}HELM${RESET} - Mission Control CLI"
   echo ""
-  echo -e "  ${CYAN}hydra${RESET}              Launch app (dev mode)"
-  echo -e "  ${CYAN}hydra test${RESET}         Run all 111 tests"
-  echo -e "  ${CYAN}hydra build${RESET}        Production build"
-  echo -e "  ${CYAN}hydra package${RESET}      Build + package .dmg/.exe"
-  echo -e "  ${CYAN}hydra check${RESET}        Typecheck + lint + test"
-  echo -e "  ${CYAN}hydra status${RESET}       Git status + test count"
-  echo -e "  ${CYAN}hydra help${RESET}         This message"
+  echo -e "  ${CYAN}helm${RESET}              Launch app (dev mode)"
+  echo -e "  ${CYAN}helm test${RESET}         Run all tests"
+  echo -e "  ${CYAN}helm build${RESET}        Production build"
+  echo -e "  ${CYAN}helm package${RESET}      Build + package .dmg/.exe"
+  echo -e "  ${CYAN}helm check${RESET}        Typecheck + lint + test"
+  echo -e "  ${CYAN}helm status${RESET}       Git status + test count"
+  echo -e "  ${CYAN}helm help${RESET}         This message"
 }
 
 step() {
@@ -42,7 +42,7 @@ cmd_dev() {
   step "Rebuilding better-sqlite3 for Electron..."
   npm run rebuild:electron 2>/dev/null || true
   ok "Native modules ready"
-  step "Launching HYDRA..."
+  step "Launching HELM..."
   npm run dev --ignore-scripts
 }
 
@@ -89,7 +89,7 @@ cmd_check() {
 }
 
 cmd_status() {
-  echo -e "${BOLD}HYDRA${RESET} status"
+  echo -e "${BOLD}HELM${RESET} status"
   echo ""
 
   # Git info

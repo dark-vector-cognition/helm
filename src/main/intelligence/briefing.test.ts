@@ -1,6 +1,16 @@
-import { describe, it, expect } from 'vitest'
-import { buildBriefingPrompt, parseBriefingResponse } from './briefing'
-import type { SystemState } from '../../shared/types'
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
+import { buildBriefingPrompt, buildNoModelBriefing, generateBriefing, parseBriefingResponse } from './briefing'
+import type { LmStudioHealResult, SystemState } from '../../shared/types'
+import { healLmStudioConnection } from './lmstudio'
+
+const { loadConfigMock } = vi.hoisted(() => ({ loadConfigMock: vi.fn() }))
+
+vi.mock('../config', () => ({ loadConfig: loadConfigMock, saveConfig: vi.fn() }))
+
+vi.mock('./lmstudio', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./lmstudio')>()),
+  healLmStudioConnection: vi.fn()
+}))
 
 const mockState: SystemState = {
   timestamp: Date.now(),
@@ -131,5 +141,123 @@ describe('parseBriefingResponse', () => {
     const raw = '```json\n{"summary":"test","alerts":[],"suggestions":[]}\n```'
     const result = parseBriefingResponse(raw)
     expect(result.raw).toBe(raw)
+  })
+})
+
+describe('generateBriefing without a model', () => {
+  const unconfigured: LmStudioHealResult = {
+    success: false,
+    repaired: false,
+    configured: false,
+    message: 'No model configured.',
+    attempts: []
+  }
+
+  it('returns a quiet no-model briefing instead of a warning when nothing is configured', async () => {
+    vi.mocked(healLmStudioConnection).mockResolvedValueOnce(unconfigured)
+
+    const result = await generateBriefing(mockState)
+
+    expect(result.summary).toContain('No model configured')
+    expect(result.alerts).toEqual([])
+    expect(result.suggestions.length).toBeGreaterThan(0)
+    expect(result.error).toBeUndefined()
+  })
+
+  it('still warns when a configured endpoint cannot be reached', async () => {
+    vi.mocked(healLmStudioConnection).mockResolvedValueOnce({
+      ...unconfigured,
+      configured: true,
+      message: 'LM Studio is unreachable. Checked http://10.0.0.9:1234.'
+    })
+
+    const result = await generateBriefing(mockState)
+
+    expect(result.alerts).toHaveLength(1)
+    expect(result.alerts[0].severity).toBe('warning')
+  })
+
+  it('builds the no-model briefing with the given timestamp', () => {
+    expect(buildNoModelBriefing(42).timestamp).toBe(42)
+  })
+})
+
+describe('generateBriefing API key header', () => {
+  const savedEnvKey = process.env.LLM_API_KEY
+  const savedEnvUrl = process.env.LM_STUDIO_URL
+  const fetchMock = vi.fn()
+
+  const connected: LmStudioHealResult = {
+    success: true,
+    repaired: false,
+    configured: true,
+    message: 'reachable',
+    url: 'https://api.example.com',
+    model: 'hosted-model',
+    attempts: []
+  }
+
+  const sentHeaders = (): Record<string, string> =>
+    (fetchMock.mock.calls[0][1] as { headers: Record<string, string> }).headers
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    delete process.env.LLM_API_KEY
+    delete process.env.LM_STUDIO_URL
+    vi.stubGlobal('fetch', fetchMock)
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: '{"summary":"ok","alerts":[],"suggestions":[]}' } }]
+      })
+    })
+    vi.mocked(healLmStudioConnection).mockResolvedValue(connected)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    if (savedEnvKey === undefined) delete process.env.LLM_API_KEY
+    else process.env.LLM_API_KEY = savedEnvKey
+    if (savedEnvUrl === undefined) delete process.env.LM_STUDIO_URL
+    else process.env.LM_STUDIO_URL = savedEnvUrl
+  })
+
+  it('sends the configured key as a bearer token', async () => {
+    loadConfigMock.mockReturnValue({ lmStudioUrl: 'https://api.example.com/v1', apiKey: 'cfg-key' })
+
+    await generateBriefing(mockState)
+
+    expect(fetchMock.mock.calls[0][0]).toBe('https://api.example.com/v1/chat/completions')
+    expect(sentHeaders()).toEqual({
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer cfg-key'
+    })
+  })
+
+  it('sends no Authorization header when no key is set', async () => {
+    loadConfigMock.mockReturnValue({ lmStudioUrl: 'https://api.example.com/v1' })
+
+    await generateBriefing(mockState)
+
+    expect(sentHeaders()).toEqual({ 'Content-Type': 'application/json' })
+    expect(sentHeaders()).not.toHaveProperty('Authorization')
+  })
+
+  it('prefers LLM_API_KEY from the environment over the config key', async () => {
+    loadConfigMock.mockReturnValue({ lmStudioUrl: 'https://api.example.com/v1', apiKey: 'cfg-key' })
+    process.env.LLM_API_KEY = 'env-key'
+
+    await generateBriefing(mockState)
+
+    expect(sentHeaders().Authorization).toBe('Bearer env-key')
+  })
+
+  it('keeps the key out of the request body and the returned briefing', async () => {
+    loadConfigMock.mockReturnValue({ lmStudioUrl: 'https://api.example.com/v1', apiKey: 'cfg-key' })
+
+    const result = await generateBriefing(mockState)
+
+    expect(String((fetchMock.mock.calls[0][1] as { body: string }).body)).not.toContain('cfg-key')
+    expect(JSON.stringify(result)).not.toContain('cfg-key')
   })
 })

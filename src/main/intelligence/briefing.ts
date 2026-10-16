@@ -1,6 +1,11 @@
 import type { SystemState, BriefingResult } from '../../shared/types'
 import { scoreSystem } from '../health'
-import { healLmStudioConnection, isLmStudioConnectivityError } from './lmstudio'
+import {
+  buildAuthHeaders,
+  healLmStudioConnection,
+  isLmStudioConnectivityError,
+  NO_MODEL_MESSAGE
+} from './lmstudio'
 
 export function buildBriefingPrompt(state: SystemState): string {
   const sections: string[] = []
@@ -47,7 +52,7 @@ export function buildBriefingPrompt(state: SystemState): string {
   const unhealthy = healthResult.workspaces.filter((w) => w.level !== 'green')
   if (unhealthy.length > 0) {
     const healthLines = unhealthy.map(
-      (w) => `- ${w.name}: ${w.level.toUpperCase()} \u2014 ${w.reasons.join(', ')}`
+      (w) => `- ${w.name}: ${w.level.toUpperCase()} - ${w.reasons.join(', ')}`
     )
     sections.push(`## Health Alerts\n${healthLines.join('\n')}`)
   }
@@ -100,17 +105,31 @@ Required JSON shape:
 Rules:
 - Be concise. This is a dashboard briefing, not a report.
 - Only raise alerts for things that actually need attention.
-- Suggestions should be actionable (e.g. "commit changes on project X", "agent idle — consider assigning work").
+- Suggestions should be actionable (e.g. "commit changes on project X", "agent idle - consider assigning work").
 - CPU > 80% = warning. CPU > 95% = critical.
 - Memory > 85% = warning. Memory > 95% = critical.
 - Dirty git repos with uncommitted changes for context = info suggestion.
 - Agent in "waiting" status for extended time = warning.`
+
+/** The model is optional. With no endpoint configured this is a normal, quiet state, not a failure. */
+export function buildNoModelBriefing(timestamp = Date.now()): BriefingResult {
+  return {
+    summary: NO_MODEL_MESSAGE,
+    alerts: [],
+    suggestions: [
+      'Optional: run any OpenAI-compatible server (LM Studio, Ollama, llama.cpp) and set LM_STUDIO_URL to its address'
+    ],
+    timestamp
+  }
+}
 
 export async function generateBriefing(state: SystemState): Promise<BriefingResult> {
   const prompt = buildBriefingPrompt(state)
   const connection = await healLmStudioConnection({ persist: true })
 
   if (!connection.success || !connection.url) {
+    if (!connection.configured) return buildNoModelBriefing()
+
     return {
       summary: connection.message,
       alerts: [
@@ -131,7 +150,7 @@ export async function generateBriefing(state: SystemState): Promise<BriefingResu
 
     const response = await fetch(`${connection.url}/v1/chat/completions`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer lm-studio' },
+      headers: { 'Content-Type': 'application/json', ...buildAuthHeaders(connection.url) },
       body: JSON.stringify({
         model: connection.model || 'local-model',
         messages: [
@@ -165,7 +184,7 @@ export async function generateBriefing(state: SystemState): Promise<BriefingResu
         ...result.alerts
       ]
       result.suggestions = [
-        `Hydra switched from ${connection.previousUrl} to ${connection.url}.`,
+        `HELM switched from ${connection.previousUrl} to ${connection.url}.`,
         ...result.suggestions
       ]
     }
@@ -177,7 +196,7 @@ export async function generateBriefing(state: SystemState): Promise<BriefingResu
 
     return {
       summary: isOffline
-        ? `LM Studio offline \u2014 unable to reach ${connection.url}`
+        ? `LM Studio offline - unable to reach ${connection.url}`
         : `Briefing failed: ${message}`,
       alerts: [
         {

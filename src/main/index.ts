@@ -1,5 +1,5 @@
 import { join, basename } from 'path'
-import { homedir } from 'os'
+import { homedir } from 'node:os'
 import { pathToFileURL } from 'node:url'
 import { loadEnvironment } from './app-paths'
 
@@ -28,12 +28,11 @@ import {
   getAlertHistory,
   getRecentBriefings,
   getNotifications,
-  getPostureHistory,
   getRecentLogLines,
   clearLogLines
 } from './db/queries'
 import { IPC_CHANNELS } from '../shared/types'
-import { loadConfig, saveConfig } from './config'
+import { clearStoredApiKey, getRedactedConfig, loadConfig, saveConfig } from './config'
 import { getAgentRegistry, getAgentById, updateAgentEntry, getTopAgents } from './registry'
 import { getRadioRelayUrl, stopRadioRelayServer } from './radio-relay'
 import { getSkillFeed } from './skills'
@@ -62,7 +61,7 @@ function createWindow(): void {
     height: 800,
     minWidth: 900,
     minHeight: 600,
-    title: 'HELM — Mission Control',
+    title: 'HELM - Mission Control',
     show: false,
     paintWhenInitiallyHidden: true,
     backgroundColor: '#111827',
@@ -98,7 +97,7 @@ function createWindow(): void {
         shell.openExternal(details.url)
       }
     } catch {
-      // Malformed URL — ignore
+      // Malformed URL - ignore
     }
     return { action: 'deny' }
   })
@@ -123,9 +122,9 @@ function createWindow(): void {
       const health = evaluateSystemHealth(state)
       tray.setImage(createTrayIcon(health))
       const tooltips = {
-        green: 'HELM — All systems nominal',
-        yellow: 'HELM — Warning: attention needed',
-        red: 'HELM — Critical: immediate attention required'
+        green: 'HELM - All systems nominal',
+        yellow: 'HELM - Warning: attention needed',
+        red: 'HELM - Critical: immediate attention required'
       }
       tray.setToolTip(tooltips[health])
     }
@@ -180,7 +179,7 @@ function evaluateSystemHealth(state: SystemState): 'green' | 'yellow' | 'red' {
 
 function createTray(): void {
   tray = new Tray(createTrayIcon('green'))
-  tray.setToolTip('HELM — All systems nominal')
+  tray.setToolTip('HELM - All systems nominal')
 
   const contextMenu = Menu.buildFromTemplate([
     {
@@ -225,7 +224,7 @@ app.whenReady().then(() => {
 
   // Log active config
   const config = loadConfig()
-  console.log('[config] LM Studio URL:', config.lmStudioUrl || process.env.LM_STUDIO_URL || 'http://localhost:1234')
+  console.log('[config] Model endpoint:', config.lmStudioUrl || process.env.LM_STUDIO_URL || 'none (optional)')
 
   // Initialize SQLite database
   getDb()
@@ -246,13 +245,10 @@ app.whenReady().then(() => {
   )
   ipcMain.handle(IPC_CHANNELS.DB_CLEAR_LOGS, () => clearLogLines())
 
-  ipcMain.handle(IPC_CHANNELS.DB_QUERY_POSTURE_HISTORY, (_event, limit: number) =>
-    getPostureHistory(limit)
-  )
-
   // Config IPC handler
-  ipcMain.handle(IPC_CHANNELS.CONFIG_GET, () => loadConfig())
+  ipcMain.handle(IPC_CHANNELS.CONFIG_GET, () => getRedactedConfig())
   ipcMain.handle(IPC_CHANNELS.CONFIG_SAVE, (_event, config: HelmConfig) => saveConfig(config))
+  ipcMain.handle(IPC_CHANNELS.CONFIG_CLEAR_API_KEY, () => clearStoredApiKey())
 
   const getVaultClient = (): VaultClient => {
     const currentConfig = loadConfig()
@@ -334,14 +330,6 @@ app.whenReady().then(() => {
       mainWindow.show()
       mainWindow.focus()
       mainWindow.webContents.send('shortcut:request-briefing')
-    }
-  })
-
-  globalShortcut.register('CommandOrControl+Y', () => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.show()
-      mainWindow.focus()
-      mainWindow.webContents.send('shortcut:invoke-yennefer')
     }
   })
 
