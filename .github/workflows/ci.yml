@@ -30,3 +30,9 @@ jobs:
 
       - name: Run tests
         run: npx vitest --run
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npx electron-vite build
