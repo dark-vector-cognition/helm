@@ -47,12 +47,6 @@ Every panel appears on exactly one page. No duplicated widgets, no redundant noi
 
 Operator walkthrough: [docs/OPERATOR-WALKTHROUGH.md](docs/OPERATOR-WALKTHROUGH.md)
 
-### Traffic Grid
-
-The capture below is from the 4.0 shell and was taken with `Secure View` enabled, so local hosts, paths, and endpoint details stay redacted.
-
-![HELM Traffic Grid](docs/screenshots/helm-4-grid-topology.png)
-
 ## Core Capabilities
 
 - **Bridge** surfaces health, hotspots, command center, and the compact AI briefing
