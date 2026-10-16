@@ -2,6 +2,7 @@ import { execFile } from 'child_process'
 import { access, mkdir, realpath, writeFile } from 'fs/promises'
 import { homedir } from 'os'
 import { dirname, join, resolve, sep } from 'path'
+import { requireGit } from './git-binary'
 import type {
   HelmConfig,
   VaultChunk,
@@ -21,6 +22,14 @@ const EXEC_TIMEOUT_MS = 10 * 60 * 1000
 type VaultSearchFilters = { client?: string; doc_type?: string; top_k?: number }
 type VaultChunkResult = VaultChunk | { error: string }
 type VaultPullSyncResult = { success: boolean; files_updated: number; error?: string }
+
+/** Run git by its absolute path, found on PATH only. Rejects with GitNotFoundError without git. */
+async function runGit(
+  args: string[],
+  options?: { cwd?: string; timeout?: number }
+): Promise<{ stdout: string; stderr: string }> {
+  return execFileAsync(await requireGit(), args, options)
+}
 
 function execFileAsync(
   file: string,
@@ -390,11 +399,10 @@ export class VaultClient {
     }
 
     try {
-      await execFileAsync('git', ['-C', this.vaultPath, 'add', filePath], {
+      await runGit(['-C', this.vaultPath, 'add', filePath], {
         timeout: 30_000
       })
-      await execFileAsync(
-        'git',
+      await runGit(
         ['-C', this.vaultPath, 'commit', '-m', `HELM: add ${sanitizedTitle}`, '--', filePath],
         { timeout: 30_000 }
       )
@@ -413,7 +421,7 @@ export class VaultClient {
 
   async pullSync(): Promise<VaultPullSyncResult> {
     try {
-      const result = await execFileAsync('git', ['-C', this.vaultPath, 'pull', '--ff-only'], {
+      const result = await runGit(['-C', this.vaultPath, 'pull', '--ff-only'], {
         timeout: 60_000
       })
       const combinedOutput = [result.stdout, result.stderr].filter(Boolean).join('\n')

@@ -1,4 +1,5 @@
 import { execFile } from 'child_process'
+import { requireGit } from '../git-binary'
 
 /**
  * Safe command running for paths that come from config or the file system.
@@ -18,17 +19,27 @@ export function powerShellArgs(script: string): string[] {
   return ['-NoProfile', '-NonInteractive', '-Command', script]
 }
 
-function run(
+interface RunOptions {
+  timeout?: number
+  env?: NodeJS.ProcessEnv
+  cwd?: string
+}
+
+function runCapture(
   file: string,
   args: string[],
-  options: { timeout?: number; env?: NodeJS.ProcessEnv; cwd?: string }
-): Promise<string> {
+  options: RunOptions
+): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
-    execFile(file, args, { ...options, maxBuffer: 10 * 1024 * 1024 }, (error, stdout) => {
+    execFile(file, args, { ...options, maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
       if (error) reject(error)
-      else resolve(String(stdout))
+      else resolve({ stdout: String(stdout ?? ''), stderr: String(stderr ?? '') })
     })
   })
+}
+
+async function run(file: string, args: string[], options: RunOptions): Promise<string> {
+  return (await runCapture(file, args, options)).stdout
 }
 
 /**
@@ -55,6 +66,20 @@ export function runFile(
   options: { timeout?: number; cwd?: string } = {}
 ): Promise<string> {
   return run(file, args, options)
+}
+
+/**
+ * Run git in `cwd`. git is started by its absolute path, found on PATH only (see git-binary.ts),
+ * so a git.exe planted in the repo cannot run. With no shell, neither the arguments nor the path
+ * are parsed as a command. Rejects with GitNotFoundError when git is not on PATH. A git failure
+ * rejects with the error from execFile, which carries stdout and stderr.
+ */
+export async function runGit(
+  args: string[],
+  options: { cwd: string; timeout?: number }
+): Promise<{ stdout: string; stderr: string }> {
+  const git = await requireGit()
+  return runCapture(git, args, options)
 }
 
 /**
