@@ -28,7 +28,6 @@ import {
   getAlertHistory,
   getRecentBriefings,
   getNotifications,
-  getPostureHistory,
   getRecentLogLines,
   clearLogLines
 } from './db/queries'
@@ -245,10 +244,6 @@ app.whenReady().then(() => {
     getRecentLogLines(limit)
   )
   ipcMain.handle(IPC_CHANNELS.DB_CLEAR_LOGS, () => clearLogLines())
-
-  ipcMain.handle(IPC_CHANNELS.DB_QUERY_POSTURE_HISTORY, (_event, limit: number) =>
-    getPostureHistory(limit)
-  )
 
   // Config IPC handler
   ipcMain.handle(IPC_CHANNELS.CONFIG_GET, () => getRedactedConfig())

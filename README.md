@@ -38,7 +38,7 @@ Every panel appears on exactly one page. No duplicated widgets, no redundant noi
 | **Bridge** | Mission control: command center, compact AI briefing, notifications |
 | **Fleet** | Repo drift and process orchestration: workspaces, git status, commit history |
 | **Swarm** | Agent operations: live agent state, swarm load, session timeline, HIVE control |
-| **Grid** | Infrastructure posture: network traffic, security scans, listening ports |
+| **Grid** | Network and ports: scoped traffic topology and listening processes |
 | **AI** | Optional model connection, AI briefings, Claude Code usage tracking |
 | **Vault** | Search and browse an Obsidian vault through a vault-rag server, and push notes into it |
 | **Registry** | Historical record: ranked agent archive, lineage, outputs, and lessons learned |
@@ -58,7 +58,7 @@ The capture below is from the 4.0 shell and was taken with `Secure View` enabled
 - **Bridge** surfaces health, hotspots, command center, and the compact AI briefing
 - **Fleet** handles repo drift, process orchestration, git status, and commit history
 - **Swarm** tracks active agent processes, cadence, coordination load, and per-agent drill-down, and launches HIVE agents (analyst, architect, builder, ops)
-- **Grid** exposes ports, scoped traffic topology, and security tools
+- **Grid** exposes listening ports and scoped traffic topology
 - **AI** centralizes the optional model connection, briefing requests, and Claude Code usage tracking
 - **Vault** searches and browses an Obsidian vault through a local or remote vault-rag server, and can push notes into it
 - **Registry** preserves impact-ranked agent history, lineage, stacks, outputs, and lessons learned. It starts empty on first run
@@ -95,7 +95,6 @@ Config file: `~/.config/helm/config.json`
 | `apiKey`          | unset                   | Optional API key for hosted endpoints, sent as `Authorization: Bearer <key>` to the configured URL only. The `LLM_API_KEY` environment variable overrides it. The key stays in the main process and is never sent to the UI |
 | `gitRepoPaths`    | `[]`                    | Paths to monitor for git status                     |
 | `monitorInterval` | `2000`                  | Monitor polling interval in milliseconds            |
-| `staffBinPath`    | auto-detected           | Path to the `staff` binary for security scans       |
 
 Optional local override:
 

@@ -38,8 +38,8 @@ const PAGE_COMMANDS: {
   {
     page: 'grid',
     label: 'Open Grid',
-    aliases: ['grid', 'network', 'ports', 'security', 'systems', 'surface'],
-    description: 'Jump to network traffic, ports, and security posture'
+    aliases: ['grid', 'network', 'ports', 'traffic', 'systems', 'surface'],
+    description: 'Jump to network traffic and listening ports'
   },
   {
     page: 'ai',

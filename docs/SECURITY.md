@@ -10,12 +10,11 @@
 
 ## Overall Rating: A-
 
-HELM demonstrates strong security fundamentals: proper context isolation, sandboxed renderer, a well-scoped preload bridge, command allowlisting, URL protocol validation, and process-kill safeguards.
+HELM demonstrates strong security fundamentals: proper context isolation, sandboxed renderer, a well-scoped preload bridge, URL protocol validation, and process-kill safeguards.
 
-**Update (2026-03-06):** All four findings from the initial B+ audit have been resolved:
+**Update (2026-03-06):** The findings from the initial B+ audit that still apply to this release have been resolved:
 - Sandbox mode enabled in webPreferences
 - `shell.openExternal` now validates URL protocol (http/https only)
-- Hardcoded `192.168.1.0/24` removed: network target is now detected dynamically or configured
 - `.gitignore` updated with `*.sqlite`, `*.db`, `*.sqlite-wal`, `*.sqlite-shm` patterns
 
 Remaining gap to A at audit time: no CSP (Content-Security-Policy) configured for the renderer. A CSP has since been added in `src/renderer/index.html`.
@@ -36,13 +35,9 @@ All direct and transitive dependencies were clean as of this audit date. That is
 
 ## 2. Hardcoded Sensitive Values
 
-**Status: WARNING, 1 finding**
+**Status: PASS**
 
-| File | Line | Finding | Severity |
-|------|------|---------|----------|
-| `src/main/intelligence/security.ts` | 63 | Hardcoded `192.168.1.0/24` as default network scan target | Low |
-
-The value is a non-secret default for the security scanner's network scan range and is overridden at runtime by the local gateway. No API keys, tokens, or credentials were found anywhere in source.
+No API keys, tokens, or credentials were found anywhere in source.
 
 **What's good:**
 - No `ANTHROPIC_API_KEY` or `sk-ant-*` tokens in source
@@ -141,7 +136,6 @@ URLs are validated before opening. Only `http:` and `https:` protocols are allow
 | `killProcess(pid)` | High | PID validation, protected process list, PID-recycle check, uses `execFile` (not `exec`) |
 | `signalProcess(pid, signal)` | High | Same safeguards as killProcess |
 | `killGroup(pids, name)` | High | Same safeguards, applied per-process |
-| `requestSecurityScan(command)` | Medium | Command allowlist (`VALID_COMMANDS`), no user input in shell string |
 | `runGitAction(repoPath, action)` | Medium | Should be verified: action must be from a fixed set |
 | `saveConfig(config)` | Low | Writes to XDG config path only |
 
@@ -161,13 +155,10 @@ HELM's main process makes extensive use of `child_process.exec()` for system mon
 | `battery.ts` | `exec` | Hardcoded `pmset` | None |
 | `disk.ts` | `exec` | Hardcoded `df` | None |
 | `git.ts` | `exec` | Scanned directory paths (from config) | Low: paths from config, not renderer |
-| `security.ts` | `exec` | Allowlisted commands + resolved binary path | Low: validated via `VALID_COMMANDS` |
 | `actions.ts` | `execFile` | PID from renderer | Mitigated: `execFile` avoids shell, PID validated as integer |
 
 **What's good:**
 - `actions.ts` uses `execFile` (not `exec`), which is immune to shell injection
-- Security scan commands are allowlisted, not passed through from renderer
-- Comments in `security.ts` document the exec safety rationale
 
 ---
 
@@ -179,7 +170,6 @@ HELM's main process makes extensive use of `child_process.exec()` for system mon
 - **No secrets in source**: all credentials via env vars, `.env` properly gitignored
 - **Proper context isolation**: `contextBridge` used correctly, no Node APIs leaked to renderer
 - **Process kill safeguards**: PID validation, protected process list, PID-recycle detection, `execFile` usage
-- **Security scan allowlisting**: renderer cannot execute arbitrary shell commands
 - **No dangerous Electron flags**: `webSecurity`, `nodeIntegration`, `allowRunningInsecureContent` all at safe defaults
 
 ### Resolved Findings
@@ -188,7 +178,6 @@ HELM's main process makes extensive use of `child_process.exec()` for system mon
 |----------|---------|--------|
 | **Medium** | Preload ran unsandboxed | FIXED: sandbox is enabled |
 | **Medium** | `shell.openExternal` accepts any URL protocol | FIXED: http/https allowlist |
-| **Low** | Hardcoded `192.168.1.0/24` default | FIXED: dynamic detection only |
 | **Low** | `.gitignore` missing `*.sqlite`/`*.db` patterns | FIXED: patterns added |
 
 ### Remaining Recommendations

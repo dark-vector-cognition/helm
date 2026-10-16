@@ -24,7 +24,6 @@ Helm Light: the open-source release.
 - Node.js 22.12 or newer is now required. CI and release jobs run on Node 22
 - Added Windows code paths for the network, port, process, battery, disk, and firewall monitors, plus Windows process protection and `taskkill` handling. These are covered by unit tests but have not been exercised on real Windows hardware
 - The Windows firewall (`netsh`) parser splits rules on the rule name line and accepts CRLF output, so each rule keeps its own name and action
-- Security scans run with a plain terminal environment so output parses the same on every platform
 
 ### Fixes
 - Remote vault reindex refuses a blank or whitespace-only host and never starts `ssh`. Local mode with the empty default host runs the local script. Both cases are tested
@@ -47,6 +46,7 @@ Helm Light: the open-source release.
 - Added the **Vault** page: search and browse an Obsidian vault through a vault-rag server, with a status bar, chunk viewer, and note push
 
 ### Removed
+- Removed the security scan feature: the Grid page panel, its IPC handlers and preload methods, the scan history reader, and its binary-path, network-target and report-path settings. An existing history table in your database is left untouched, with its rows
 - Removed the optional voice persona briefing mode, including the `Cmd/Ctrl+Y` shortcut, its lens setting, and its environment overrides. The standard briefing is unchanged
 - Removed the fifth built-in HIVE role. HIVE ships four roles: analyst, architect, builder, and ops
 - Removed planning notes, the path audit, the wiki journal, and out-of-date screenshots from `docs/`
@@ -63,7 +63,7 @@ Helm Light: the open-source release.
 - Added a documented `.env.example` with optional overrides for LM Studio, repo scanning, agent feeds, logs, Sentinel, and HIVE
 
 ### Reliability
-- Made Sentinel vault logging, LuLu parser lookup, and Staff scan report output configurable instead of assuming one machine layout
+- Made Sentinel vault logging and LuLu parser lookup configurable instead of assuming one machine layout
 - Added packaged-resource shipping for registry seed data, Sentinel config, HIVE role prompts, and the LuLu parser helper
 
 ### Docs
@@ -233,7 +233,6 @@ Helm Light: the open-source release.
 - Network bandwidth monitoring via `nettop` with per-process rates (macOS)
 - Firewall rule correlation via LuLu plist parsing (macOS)
 - Live log file tailing
-- Security scan integration (config-driven paths)
 - Dashboard with 9 panels, 4 SVG chart components, and scorecards strip
 - Time-series ring buffer (60 snapshots, ~2min history) with sparklines
 - System tray with color-coded health indicator
