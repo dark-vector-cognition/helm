@@ -133,7 +133,7 @@ URLs are validated before opening. Only `http:` and `https:` protocols are allow
 
 `src/preload/index.ts` follows Electron security best practices:
 
-- Uses `contextBridge.exposeInMainWorld('hydra', api)` — proper isolation
+- Uses `contextBridge.exposeInMainWorld('helm', api)` — proper isolation
 - All IPC calls use typed channel constants from `shared/types.ts`
 - No `require()`, `eval()`, `exec()`, `spawn()`, or `Function()` in preload
 - No raw `ipcRenderer` exposed to renderer — all calls are wrapped in typed functions
