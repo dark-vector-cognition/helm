@@ -577,8 +577,9 @@ export interface VaultReindexResult {
 export interface HelmConfig {
   /**
    * Optional API key for hosted OpenAI-compatible endpoints. LLM_API_KEY in the environment
-   * overrides it. The raw key never crosses IPC: the renderer always receives an empty string
-   * here, and a save with an empty value keeps the stored key.
+   * overrides it, but only together with LM_STUDIO_URL. The raw key never crosses IPC: the
+   * renderer always receives an empty string here, and a save with an empty value keeps the
+   * stored key.
    */
   apiKey?: string
   /** Set by the main process on config sent to the renderer: true when a key is in effect. Never saved. */

@@ -5,6 +5,13 @@ const mockExecFile = vi.fn()
 const mockAccess = vi.fn()
 const mockMkdir = vi.fn()
 const mockWriteFile = vi.fn()
+const mockRequireGit = vi.fn()
+const GIT = '/opt/tools/bin/git'
+
+vi.mock('./git-binary', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./git-binary')>()),
+  requireGit: (...args: unknown[]) => mockRequireGit(...args)
+}))
 
 vi.mock('child_process', () => ({
   execFile: (...args: unknown[]) => mockExecFile(...args)
@@ -35,6 +42,7 @@ describe('VaultClient', () => {
     mockAccess.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
     mockMkdir.mockResolvedValue(undefined)
     mockWriteFile.mockResolvedValue(undefined)
+    mockRequireGit.mockResolvedValue(GIT)
     fetchMock.mockResolvedValue({
       ok: false,
       status: 503,
@@ -286,22 +294,63 @@ describe('VaultClient', () => {
 
       expect(mockExecFile).toHaveBeenNthCalledWith(
         1,
-        'git',
-        ['-C', '/home/test/Documents/ai/obsidian-vault', 'add', '/home/test/Documents/ai/obsidian-vault/Inbox/Commit Me.md'],
+        GIT,
+        ['-c', 'core.fsmonitor=false', '-C', '/home/test/Documents/ai/obsidian-vault', 'add', '/home/test/Documents/ai/obsidian-vault/Inbox/Commit Me.md'],
         expect.objectContaining({ timeout: 30000 }),
         expect.any(Function)
       )
       expect(mockExecFile).toHaveBeenNthCalledWith(
         2,
-        'git',
-        ['-C', '/home/test/Documents/ai/obsidian-vault', 'commit', '-m', 'HELM: add Commit Me', '--', '/home/test/Documents/ai/obsidian-vault/Inbox/Commit Me.md'],
+        GIT,
+        ['-c', 'core.fsmonitor=false', '-C', '/home/test/Documents/ai/obsidian-vault', 'commit', '-m', 'HELM: add Commit Me', '--', '/home/test/Documents/ai/obsidian-vault/Inbox/Commit Me.md'],
         expect.objectContaining({ timeout: 30000 }),
         expect.any(Function)
       )
     })
   })
 
+  describe('git missing from PATH', () => {
+    beforeEach(() => {
+      mockRequireGit.mockRejectedValue(new Error('git was not found on PATH'))
+    })
+
+    it('still saves the note and starts no program named git', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const client = new VaultClient(baseConfig)
+
+      const result = await client.pushNote('No Git', 'Body')
+
+      expect(result.success).toBe(true)
+      expect(mockWriteFile).toHaveBeenCalledTimes(1)
+      expect(mockExecFile.mock.calls.filter((call) => /git$/.test(String(call[0])))).toEqual([])
+      warn.mockRestore()
+    })
+
+    it('reports that git was not found when pulling', async () => {
+      const client = new VaultClient(baseConfig)
+
+      const result = await client.pullSync()
+
+      expect(result.success).toBe(false)
+      expect(result.files_updated).toBe(0)
+      expect(result.error).toContain('git was not found on PATH')
+      expect(mockExecFile).not.toHaveBeenCalled()
+    })
+  })
+
   describe('pullSync()', () => {
+    it('runs git pull by its absolute path', async () => {
+      const client = new VaultClient(baseConfig)
+      await client.pullSync()
+
+      expect(mockExecFile).toHaveBeenCalledWith(
+        GIT,
+        ['-c', 'core.fsmonitor=false', '-C', '/home/test/Documents/ai/obsidian-vault', 'pull', '--ff-only'],
+        expect.objectContaining({ timeout: 60000 }),
+        expect.any(Function)
+      )
+    })
+
     it('returns files_updated count on successful pull', async () => {
       mockExecFile.mockImplementationOnce(
         (_file: string, _args: string[], _options: unknown, callback: Function) => {
