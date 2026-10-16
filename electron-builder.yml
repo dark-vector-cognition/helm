@@ -46,7 +46,7 @@ dmg:
 linux:
   target:
     - AppImage
-  maintainer: kunalnano
+  maintainer: Dark Vector Cognition LLC
   category: Development
 appImage:
   artifactName: ${name}-${version}.${ext}

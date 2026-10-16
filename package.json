@@ -3,8 +3,15 @@
   "version": "4.0.2",
   "description": "HELM — Operator shell for local AI systems, processes, ports, and git repos",
   "main": "./out/main/index.js",
-  "author": "kunalnano",
-  "homepage": "https://github.com/kunalnano/hydra",
+  "author": "Dark Vector Cognition LLC",
+  "homepage": "https://github.com/dark-vector-cognition/helm",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dark-vector-cognition/helm.git"
+  },
+  "bugs": {
+    "url": "https://github.com/dark-vector-cognition/helm/issues"
+  },
   "license": "SEE LICENSE IN LICENSE",
   "scripts": {
     "format": "prettier --write .",
