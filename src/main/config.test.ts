@@ -69,8 +69,8 @@ describe('config JSON serialization', () => {
       snapshotInterval: 60000,
       radioHomeLocation: {
         label: 'Home base',
-        latitude: 29.7,
-        longitude: -98.4
+        latitude: 0,
+        longitude: 0
       },
       ...TEST_VAULT_DEFAULTS
     }
@@ -87,8 +87,8 @@ describe('config JSON serialization', () => {
     expect(parsed.snapshotInterval).toBe(60000)
     expect(parsed.radioHomeLocation).toEqual({
       label: 'Home base',
-      latitude: 29.7,
-      longitude: -98.4
+      latitude: 0,
+      longitude: 0
     })
   })
 
@@ -247,8 +247,8 @@ describe('loadConfig env overrides', () => {
         {
           radioHomeLocation: {
             label: 'Operator base',
-            latitude: 30.1234,
-            longitude: -97.9876
+            latitude: 51.5,
+            longitude: -0.1
           }
         },
         null,
@@ -261,8 +261,8 @@ describe('loadConfig env overrides', () => {
 
     expect(loadConfig().radioHomeLocation).toEqual({
       label: 'Operator base',
-      latitude: 30.1234,
-      longitude: -97.9876
+      latitude: 51.5,
+      longitude: -0.1
     })
   })
 
