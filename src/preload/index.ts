@@ -162,6 +162,9 @@ const api = {
   saveConfig: (config: HelmConfig): Promise<void> =>
     ipcRenderer.invoke(IPC_CHANNELS.CONFIG_SAVE, config),
 
+  clearApiKey: (): Promise<void> =>
+    ipcRenderer.invoke(IPC_CHANNELS.CONFIG_CLEAR_API_KEY),
+
   getCommitHistory: (repoPath: string, limit: number): Promise<GitCommit[]> =>
     ipcRenderer.invoke(IPC_CHANNELS.GIT_COMMIT_HISTORY, repoPath, limit),
 
