@@ -3,6 +3,7 @@ import { promisify } from 'util'
 import { existsSync } from 'fs'
 import { join } from 'path'
 import { isWindows } from '../platform'
+import { POWERSHELL_FIND_GIT_SCRIPT, runFile, runPowerShell } from './shell-run'
 import type { GitRepoInfo, GitCommit, GitActionResult } from '../../shared/types'
 import { getAppRoot, loadEnvironment, resolvePathSetting } from '../app-paths'
 
@@ -96,17 +97,15 @@ export async function scanForRepos(scanDirs?: string[]): Promise<GitRepoInfo[]> 
       let stdout: string
 
       if (isWindows()) {
-        const cmd = `powershell.exe -NoProfile -Command "Get-ChildItem -Path '${dir}' -Recurse -Depth 2 -Directory -Filter '.git' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName"`
-        const result = await execAsync(cmd, { timeout: 15000 })
-        stdout = result.stdout
+        // The directory reaches PowerShell as an environment variable, never inside the script.
+        stdout = await runPowerShell(POWERSHELL_FIND_GIT_SCRIPT, { DIR: dir }, 15000)
       } else {
-        const result = await execAsync(`find "${dir}" -maxdepth 2 -name .git -type d 2>/dev/null`)
-        stdout = result.stdout
+        stdout = await runFile('find', [dir, '-maxdepth', '2', '-name', '.git', '-type', 'd'])
       }
 
       const repoPaths = stdout
         .trim()
-        .split('\n')
+        .split(/\r?\n/)
         .filter((p) => p.length > 0)
         .map((p) => p.replace(/[/\\]\.git$/, ''))
       const results = await Promise.all(repoPaths.map(getRepoInfo))

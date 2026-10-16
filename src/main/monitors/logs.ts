@@ -1,13 +1,15 @@
 import { watch, type FSWatcher } from 'fs'
 import { readFile, stat } from 'fs/promises'
 import { basename, join } from 'path'
-import { exec } from 'child_process'
-import { promisify } from 'util'
 import { homedir, tmpdir } from 'os'
 import { isWindows } from '../platform'
+import {
+  POWERSHELL_EXPAND_GLOB_SCRIPT,
+  SH_EXPAND_GLOB_SCRIPT,
+  runFile,
+  runPowerShell
+} from './shell-run'
 import type { HelmConfig, LogLine } from '../../shared/types'
-
-const execAsync = promisify(exec)
 
 export type LogBatchKind = 'initial' | 'tail'
 type LogStreamCallback = (lines: LogLine[], kind: LogBatchKind) => void
@@ -111,22 +113,20 @@ async function watchLogFile(filePath: string): Promise<void> {
   watchedFiles.set(filePath, watched)
 }
 
-async function expandGlobPattern(pattern: string): Promise<string[]> {
+export async function expandGlobPattern(pattern: string): Promise<string[]> {
   try {
     let stdout: string
 
     if (isWindows()) {
-      const cmd = `powershell.exe -NoProfile -Command "Get-ChildItem -Path '${pattern}' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName"`
-      const result = await execAsync(cmd, { timeout: 5000 })
-      stdout = result.stdout
+      // The pattern reaches PowerShell as an environment variable, never inside the script text.
+      stdout = await runPowerShell(POWERSHELL_EXPAND_GLOB_SCRIPT, { PATTERN: pattern }, 5000)
     } else {
-      const result = await execAsync(`ls ${pattern} 2>/dev/null || true`)
-      stdout = result.stdout
+      stdout = await runFile('sh', ['-c', SH_EXPAND_GLOB_SCRIPT, 'sh', pattern])
     }
 
     return stdout
       .trim()
-      .split('\n')
+      .split(/\r?\n/)
       .filter((f) => f.length > 0)
   } catch {
     return []

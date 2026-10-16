@@ -154,7 +154,8 @@ HELM's main process makes extensive use of `child_process.exec()` for system mon
 | `network.ts` | `exec` | Hardcoded `nettop` | None |
 | `battery.ts` | `exec` | Hardcoded `pmset` | None |
 | `disk.ts` | `exec` | Hardcoded `df` | None |
-| `git.ts` | `exec` | Scanned directory paths (from config) | Low: paths from config, not renderer |
+| `git.ts` | `exec` | Fixed git commands; the repo path is the working directory, not part of the command | None |
+| `git.ts`, `logs.ts` (path discovery) | `execFile` | Config and file system paths, passed as separate arguments (POSIX) or environment variables (PowerShell), never inside a command string | None |
 | `actions.ts` | `execFile` | PID from renderer | Mitigated: `execFile` avoids shell, PID validated as integer |
 
 **What's good:**
