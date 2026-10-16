@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { expandGlobPattern } from './logs'
+import { SH_EXPAND_GLOB_SCRIPT, runFile } from './shell-run'
 import { scanForRepos } from './git'
 
 function hasGit(): boolean {
@@ -66,5 +67,48 @@ describePosix('POSIX path handling with quotes and shell syntax in the path', ()
 
     expect(repos.map((r) => r.path)).toEqual([repo])
     expect(existsSync(marker)).toBe(false)
+  })
+})
+
+describePosix('POSIX glob script with names that look like options', () => {
+  let dir: string
+
+  beforeEach(() => {
+    dir = realpathSync(mkdtempSync(join(tmpdir(), 'helm-glob-')))
+  })
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  const expand = async (pattern: string): Promise<string[]> =>
+    (await runFile('sh', ['-c', SH_EXPAND_GLOB_SCRIPT, 'sh', pattern], { cwd: dir }))
+      .split('\n')
+      .filter((line) => line.length > 0)
+      .sort()
+
+  it('reads a match that starts with a dash as a file name, not as an ls option', async () => {
+    writeFileSync(join(dir, '-x1.log'), '1')
+    writeFileSync(join(dir, '-x2.log'), '2')
+    writeFileSync(join(dir, 'y.log'), '3')
+
+    await expect(expand('-x*.log')).resolves.toEqual(['-x1.log', '-x2.log'])
+  })
+
+  it('reads a pattern that is only a dash-leading name as a file name', async () => {
+    writeFileSync(join(dir, '-la'), 'x')
+
+    await expect(expand('-la')).resolves.toEqual(['-la'])
+  })
+
+  it('lists a matching directory by its own name, not its contents', async () => {
+    mkdirSync(join(dir, 'logs'))
+    writeFileSync(join(dir, 'logs', 'inner.log'), 'x')
+
+    await expect(expand('log*')).resolves.toEqual(['logs'])
+  })
+
+  it('returns nothing when the pattern matches no file', async () => {
+    await expect(expand('-none*')).resolves.toEqual([])
   })
 })

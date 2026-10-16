@@ -60,9 +60,11 @@ export function runFile(
 /**
  * Expand a file pattern with the shell. The pattern is a positional argument ($1), so it is never
  * parsed as a command. IFS is emptied so a space in the pattern does not split it into several
- * words, while the wildcards still expand.
+ * words, while the wildcards still expand. `ls -d --` ends option parsing, so a match whose name
+ * starts with a dash is read as a file name and not as an option, and -d lists a matching
+ * directory by its own name instead of its contents.
  */
-export const SH_EXPAND_GLOB_SCRIPT = 'IFS=; ls $1 2>/dev/null || true'
+export const SH_EXPAND_GLOB_SCRIPT = 'IFS=; ls -d -- $1 2>/dev/null || true'
 
 /** Find .git directories up to two levels under `dir`. */
 export const POWERSHELL_FIND_GIT_SCRIPT =
