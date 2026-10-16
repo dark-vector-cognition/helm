@@ -606,6 +606,7 @@ export interface VaultReindexResult {
 }
 
 export interface HelmConfig {
+  /** Optional API key for hosted OpenAI-compatible endpoints. LLM_API_KEY in the environment overrides it. */
   apiKey?: string
   gitRepoPaths: string[]
   monitorInterval: number

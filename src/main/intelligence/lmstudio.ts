@@ -34,6 +34,39 @@ function normalizeLmStudioUrl(rawUrl: string): string | null {
   }
 }
 
+/**
+ * Optional API key for hosted OpenAI-compatible endpoints. LLM_API_KEY in the
+ * environment wins over `apiKey` in the config file. Never log the result.
+ */
+export function resolveApiKey(config: { apiKey?: string }): string | undefined {
+  const fromEnv = process.env.LLM_API_KEY?.trim()
+  if (fromEnv) return fromEnv
+  const fromConfig = typeof config.apiKey === 'string' ? config.apiKey.trim() : ''
+  return fromConfig || undefined
+}
+
+/**
+ * Headers for a request to `url`. With no key set, no Authorization header is sent.
+ * With a key set, the header goes only to the endpoint the user configured, never to
+ * a localhost, LAN or subnet candidate found by discovery, so the key cannot leak to
+ * other machines.
+ */
+export function buildAuthHeaders(
+  url: string,
+  config: { apiKey?: string; lmStudioUrl?: string } = loadConfig()
+): Record<string, string> {
+  const key = resolveApiKey(config)
+  if (!key) return {}
+
+  const target = normalizeLmStudioUrl(url)
+  if (!target) return {}
+
+  const configured = [config.lmStudioUrl, process.env.LM_STUDIO_URL]
+    .map((value) => normalizeLmStudioUrl(value || ''))
+    .filter((value): value is string => Boolean(value))
+  return configured.includes(target) ? { Authorization: `Bearer ${key}` } : {}
+}
+
 function hasConfiguredEndpoint(configuredUrl: string | undefined): boolean {
   return Boolean((configuredUrl || '').trim() || (process.env.LM_STUDIO_URL || '').trim())
 }
@@ -135,6 +168,13 @@ async function buildCandidateUrls(): Promise<{ priority: string[]; subnet: strin
     return { priority: [DEFAULT_LM_STUDIO_URL, LOOPBACK_LM_STUDIO_URL], subnet: [] }
   }
 
+  if (resolveApiKey(config)) {
+    // A key means an explicit, authenticated endpoint. Never fall back to discovered hosts:
+    // they cannot use the key, and a repair must not replace the user's hosted URL.
+    const explicit = [configured, envUrl].filter((value): value is string => Boolean(value))
+    return { priority: [...new Set(explicit)], subnet: [] }
+  }
+
   const priority = [
     configured,
     envUrl,
@@ -164,14 +204,15 @@ async function buildCandidateUrls(): Promise<{ priority: string[]; subnet: strin
 async function fetchWithTimeout(
   fetchImpl: typeof fetch,
   url: string,
-  timeoutMs: number
+  timeoutMs: number,
+  headers: Record<string, string>
 ): Promise<Response> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), timeoutMs)
 
   try {
     return await fetchImpl(url, {
-      headers: { Authorization: 'Bearer lm-studio' },
+      headers,
       signal: controller.signal
     })
   } finally {
@@ -182,7 +223,8 @@ async function fetchWithTimeout(
 export async function probeLmStudioEndpoint(
   baseUrl: string,
   fetchImpl: typeof fetch = fetch,
-  timeoutMs = MODEL_DISCOVERY_TIMEOUT_MS
+  timeoutMs = MODEL_DISCOVERY_TIMEOUT_MS,
+  headers: Record<string, string> = {}
 ): Promise<LmStudioProbeAttempt> {
   const normalized = normalizeLmStudioUrl(baseUrl)
   if (!normalized) {
@@ -193,7 +235,8 @@ export async function probeLmStudioEndpoint(
     const response = await fetchWithTimeout(
       fetchImpl,
       `${normalized}/v1/models`,
-      timeoutMs
+      timeoutMs,
+      headers
     )
 
     if (!response.ok) {
@@ -259,7 +302,12 @@ export async function healLmStudioConnection(options?: {
 
   const { priority, subnet } = await buildCandidateUrls()
   for (const candidate of priority) {
-    const probe = await probeLmStudioEndpoint(candidate, fetchImpl)
+    const probe = await probeLmStudioEndpoint(
+      candidate,
+      fetchImpl,
+      MODEL_DISCOVERY_TIMEOUT_MS,
+      buildAuthHeaders(candidate, config)
+    )
     attempts.push(probe)
 
     if (!probe.ok) continue
