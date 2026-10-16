@@ -27,7 +27,7 @@ npm install
 npm run dev
 ```
 
-Requires Node.js 22.12 or newer. No model is needed to run HELM. If you want AI briefings, point it at any OpenAI-compatible server (see [Local AI Workflow](#local-ai-workflow)).
+Requires Node.js 22.12 or newer. No model is needed to run HELM. If you want AI briefings, point it at any OpenAI-compatible server (see [Optional Model](#optional-model)).
 
 ## Navigation (9 Pages, Zero Panel Duplication)
 
@@ -67,7 +67,7 @@ The capture below is from the 4.0 shell and was taken with `Secure View` enabled
 - **Sentinel** watches system state in the background and raises alerts from a set of configurable rules
 - **SQLite persistence** stores snapshots, alerts, briefings, notifications, and log history locally
 
-## Local AI Workflow
+## Optional Model
 
 The model is optional. HELM runs the same with or without one, and every page renders either way.
 

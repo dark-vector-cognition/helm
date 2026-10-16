@@ -45,7 +45,7 @@ Use `Grid` for infrastructure posture and network visibility.
 
 ### AI
 
-The optional local-model loop.
+The optional local model loop.
 
 - The AI page owns the model connection, briefings, repair, and usage tracking.
 - The model is optional. With none configured the page still renders and briefings show a "No model configured" state.

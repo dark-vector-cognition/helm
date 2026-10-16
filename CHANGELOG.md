@@ -112,7 +112,7 @@ Helm Light: the open-source release.
 ### FM Radio
 - Added a dedicated `FM Radio` page with a Winamp-style stereo relay layout, presets, search, transport controls, manual stream loading, and local MP3 import
 - Added a main-process localhost radio relay so remote streams, manual URLs, and local files play through a stable Electron media path
-- Added native audio-file picking, persisted local-library entries, and a singleton audio engine so playback survives navigation
+- Added native audio-file picking, persisted local library entries, and a singleton audio engine so playback survives navigation
 
 ### Reliability
 - Allowed loopback media in the renderer CSP and tightened window startup so the FM deck and shell surface appear reliably on launch
@@ -148,7 +148,7 @@ Helm Light: the open-source release.
 
 ### Docs
 - Updated the README to reflect the shipped Live Lattice patch line and current release state
-- Added an operator walkthrough covering pages, actions, shortcuts, and the current local-AI workflow
+- Added an operator walkthrough covering pages, actions, shortcuts, and the current local AI workflow
 
 ## v2.1.1 - 2026-03-15
 
