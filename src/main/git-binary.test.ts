@@ -2,11 +2,13 @@ import { describe, expect, it, vi } from 'vitest'
 import { execFileSync } from 'child_process'
 import path from 'path'
 import {
+  GIT_SAFE_OPTIONS,
   GitNotFoundError,
   createGitResolver,
   findOnPath,
   requireGit,
   resolveGit,
+  withSafeGitOptions,
   type PathLookup
 } from './git-binary'
 
@@ -283,5 +285,30 @@ describe('requireGit', () => {
 
   it('GitNotFoundError is an Error', () => {
     expect(new GitNotFoundError()).toBeInstanceOf(Error)
+  })
+})
+
+describe('withSafeGitOptions', () => {
+  it('turns core.fsmonitor off, in front of the subcommand', () => {
+    expect(GIT_SAFE_OPTIONS).toEqual(['-c', 'core.fsmonitor=false'])
+    expect(withSafeGitOptions(['status', '--porcelain'])).toEqual([
+      '-c',
+      'core.fsmonitor=false',
+      'status',
+      '--porcelain'
+    ])
+    expect(withSafeGitOptions(['-C', '/vault', 'pull'])).toEqual([
+      '-c',
+      'core.fsmonitor=false',
+      '-C',
+      '/vault',
+      'pull'
+    ])
+  })
+
+  it('does not change the list it is given', () => {
+    const args = ['log', '-n', '3']
+    withSafeGitOptions(args)
+    expect(args).toEqual(['log', '-n', '3'])
   })
 })
