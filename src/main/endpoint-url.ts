@@ -25,3 +25,19 @@ export function normalizeEndpointUrl(raw: unknown): string | null {
     return null
   }
 }
+
+/**
+ * The API key from LLM_API_KEY paired with the endpoint from LM_STUDIO_URL, or undefined.
+ *
+ * The key counts only when LM_STUDIO_URL is set and parses as a URL, because that pair is the user
+ * naming both the endpoint and the key for it in one place. `url` is the normalized endpoint the
+ * key may be sent to. The model client and the settings flag (hasApiKey) both use this one
+ * function, so the UI never reports a key that the client would ignore. Never log the result.
+ */
+export function envKeyWithEndpoint(
+  env: Record<string, string | undefined> = process.env
+): { key: string; url: string } | undefined {
+  const key = env.LLM_API_KEY?.trim()
+  const url = normalizeEndpointUrl(env.LM_STUDIO_URL)
+  return key && url ? { key, url } : undefined
+}

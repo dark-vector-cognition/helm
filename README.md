@@ -71,7 +71,7 @@ To turn on AI briefings, point HELM at any OpenAI-compatible server. No cloud in
 - With nothing configured, HELM does not scan your network. `Request Briefing` only looks for a server on this machine at `http://localhost:1234` and otherwise shows a calm "No model configured" state
 - Once an endpoint is configured, `Invoke Repair` probes it plus local and LAN-discovered fallbacks, and saves a repaired URL when it finds a healthy server. When an API key is set, it checks only the configured endpoint
 - An API key belongs to the endpoint it was saved for: if a save changes `lmStudioUrl` without sending a new key, HELM deletes the stored key so it cannot be sent to a different host
-- `LLM_API_KEY` applies only together with `LM_STUDIO_URL`, and it is sent only to that endpoint. Without `LM_STUDIO_URL` it is ignored
+- `LLM_API_KEY` applies only together with `LM_STUDIO_URL`, and it is sent only to that endpoint. Without `LM_STUDIO_URL`, or with one that is not a valid URL, it is ignored
 
 For cross-machine setups, enable network serving on the model host and make sure the chosen port is reachable through the host firewall.
 
