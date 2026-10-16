@@ -2,11 +2,13 @@ import { useEffect, useRef } from 'react'
 import { useRadioStore } from '../stores/radio'
 import { useSystemStore } from '../stores/system'
 import { FM_STATIONS } from '../panels/fm-stations'
+import { RADIO_HOME_CHANGED_EVENT, homePoint } from '../stores/radio-home'
 
 const TAU = Math.PI * 2
 
+// Public broadcaster and service locations. The user's own position is never listed here:
+// it comes from the saved radio home endpoint, and without one no marker is drawn.
 const KNOWN_LOCATIONS: Record<string, [number, number]> = {
-  user: [29.87, -98.25],
   wbgo: [40.73, -74.17],
   kexp: [47.62, -122.35],
   somafm: [37.77, -122.42],
@@ -19,8 +21,7 @@ const KNOWN_LOCATIONS: Record<string, [number, number]> = {
   wbls: [40.75, -73.99],
   kblx: [37.77, -122.42],
   bbc: [51.51, -0.13],
-  anthropic: [37.77, -122.42],
-  localhost: [29.87, -98.25]
+  anthropic: [37.77, -122.42]
 }
 
 function stationLocationKey(stationId: string): string | null {
@@ -81,6 +82,7 @@ interface ArcDef { from: [number, number]; to: [number, number]; color: string }
 export function SkinGlobe(): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const rafRef = useRef(0)
+  const homeRef = useRef<[number, number] | null>(null)
   const dataRef = useRef<{ stationId: string; hasActiveAgent: boolean }>({
     stationId: '', hasActiveAgent: false
   })
@@ -92,6 +94,27 @@ export function SkinGlobe(): JSX.Element {
   dataRef.current.hasActiveAgent = agents?.some(
     (a) => a.type === 'claude-code' && (a.status === 'active' || a.status === 'busy')
   ) ?? false
+
+  // The home endpoint comes from the saved config. Nothing saved means no user marker.
+  useEffect(() => {
+    let active = true
+    const load = (): void => {
+      window.helm
+        .getConfig()
+        .then((config) => {
+          if (active) homeRef.current = homePoint(config.radioHomeLocation)
+        })
+        .catch(() => {
+          if (active) homeRef.current = null
+        })
+    }
+    load()
+    window.addEventListener(RADIO_HOME_CHANGED_EVENT, load)
+    return () => {
+      active = false
+      window.removeEventListener(RADIO_HOME_CHANGED_EVENT, load)
+    }
+  }, [])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -123,7 +146,7 @@ export function SkinGlobe(): JSX.Element {
       const cy = h / 2
       const r = Math.min(cx, cy) * 0.78
       const rot = time * (TAU / 60)
-      const user = KNOWN_LOCATIONS.user
+      const user = homeRef.current
 
       ctx.clearRect(0, 0, canvas.width, canvas.height)
       ctx.save()
@@ -168,12 +191,14 @@ export function SkinGlobe(): JSX.Element {
 
       // Arcs
       const arcs: ArcDef[] = []
-      const rk = stationLocationKey(dataRef.current.stationId)
-      if (rk && KNOWN_LOCATIONS[rk]) {
-        arcs.push({ from: KNOWN_LOCATIONS[rk], to: user, color: 'rgba(255,210,130,0.55)' })
-      }
-      if (dataRef.current.hasActiveAgent) {
-        arcs.push({ from: KNOWN_LOCATIONS.anthropic, to: user, color: 'rgba(255,170,90,0.55)' })
+      if (user) {
+        const rk = stationLocationKey(dataRef.current.stationId)
+        if (rk && KNOWN_LOCATIONS[rk]) {
+          arcs.push({ from: KNOWN_LOCATIONS[rk], to: user, color: 'rgba(255,210,130,0.55)' })
+        }
+        if (dataRef.current.hasActiveAgent) {
+          arcs.push({ from: KNOWN_LOCATIONS.anthropic, to: user, color: 'rgba(255,170,90,0.55)' })
+        }
       }
 
       for (const arc of arcs) {
@@ -205,8 +230,8 @@ export function SkinGlobe(): JSX.Element {
       }
 
       // User dot
-      const up = project(user[0], user[1], cx, cy, r, rot)
-      if (up.visible) {
+      const up = user ? project(user[0], user[1], cx, cy, r, rot) : null
+      if (up && up.visible) {
         const pulse = 0.5 + Math.sin(time * 3) * 0.5
         ctx.beginPath()
         ctx.arc(up.x, up.y, 3 + pulse * 2, 0, TAU)
