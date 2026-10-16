@@ -15,10 +15,13 @@ export interface NotifyChannel {
 // Channel: macOS native notifications
 function sendMacOSNotification(alert: SentinelAlert): void {
   if (!Notification.isSupported()) return
+  // Only push native notifications for critical alerts to avoid bombardment
+  if (alert.severity !== 'critical') return
   const n = new Notification({
     title: `HELM Sentinel: ${alert.title}`,
     body: alert.body,
-    urgency: alert.severity === 'critical' ? 'critical' : 'normal'
+    urgency: 'critical',
+    silent: true
   })
   n.show()
 }

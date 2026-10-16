@@ -17,8 +17,9 @@ const AGENT_PATTERNS: AgentPattern[] = [
     match: (proc) => {
       const lower = proc.command.toLowerCase()
       const name = proc.name.toLowerCase()
+      const hasClaudeExecutable = name === 'claude' || /(^|\s)(?:\S*\/)?claude(?:\s|$)/i.test(proc.command)
       return (
-        (name === 'claude' || lower.includes('/claude') || lower.startsWith('claude')) &&
+        hasClaudeExecutable &&
         !lower.includes('claude.app') &&
         !lower.includes('claude helper')
       )
@@ -33,38 +34,34 @@ const AGENT_PATTERNS: AgentPattern[] = [
       const name = proc.name.toLowerCase()
       return (
         (name === 'codex' || /(^|\s)codex(\s|$)/i.test(proc.command)) &&
+        !lower.includes('/applications/codex.app/') &&
+        !lower.includes('/contents/resources/codex app-server') &&
         !lower.includes('codex helper') &&
+        !lower.includes('codex exec') &&
         !lower.includes('codex-cli-mcp-tool') &&
+        !lower.includes('computer-use') &&
+        !lower.includes('skycomputeruse') &&
         !lower.includes('sparkle') &&
         !lower.includes('crashpad')
       )
     },
-    dedupeKey: (proc) => {
-      const lower = proc.command.toLowerCase()
-      if (
-        lower.includes('/applications/codex.app/contents/macos/codex') ||
-        lower.includes('/contents/resources/codex app-server')
-      ) {
-        return 'codex-desktop'
-      }
-      return `codex:${proc.cwd || proc.command}`
-    },
-    priority: (proc) => {
-      const lower = proc.command.toLowerCase()
-      if (lower.includes('/contents/resources/codex app-server')) return 3
-      if (lower.includes('/applications/codex.app/contents/macos/codex')) return 2
-      return 1
-    }
+    dedupeKey: (proc) => `codex:${proc.cwd || proc.command}`
   },
   {
     type: 'gemini',
     displayName: 'Gemini',
-    // Chrome app wrapper for Gemini, or native gemini binary
+    // CLI instances only. Native Gemini desktop helpers are not council agents.
     match: (proc) => {
       const lower = proc.command.toLowerCase()
-      return lower.includes('gemini.app') || /\bgemini\b/.test(lower)
+      const hasGeminiExecutable = /(^|\s)(?:\S*\/)?gemini(?:\s|$)/i.test(proc.command)
+      return (
+        hasGeminiExecutable &&
+        !lower.includes('gemini.app') &&
+        !lower.includes('geminiapplauncher') &&
+        !lower.includes('crashpad')
+      )
     },
-    dedupeKey: (proc) => `gemini:${proc.cwd || proc.command}`
+    dedupeKey: (proc) => `gemini-cli:${proc.cwd || 'default'}`
   },
   {
     type: 'cursor',

@@ -6,12 +6,12 @@ export interface PreviousState {
   timestamp: number
 }
 
-const CPU_THRESHOLD = 90
-const MEMORY_THRESHOLD = 90
-const DISK_THRESHOLD = 85
-const BATTERY_LOW_THRESHOLD = 20
-const RAM_CLIMB_THRESHOLD = 15 // percent increase over sliding window
-const COOLDOWN_MS = 60_000 // Don't re-fire the same rule within 60s
+const CPU_THRESHOLD = 95
+const MEMORY_THRESHOLD = 95
+const DISK_THRESHOLD = 90
+const BATTERY_LOW_THRESHOLD = 15
+const RAM_CLIMB_THRESHOLD = 20 // percent increase over sliding window
+const COOLDOWN_MS = 300_000 // Don't re-fire the same rule within 5min
 
 // Tracks last fire time per rule+target combo
 const lastFired = new Map<string, number>()

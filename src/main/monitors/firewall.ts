@@ -3,7 +3,7 @@ import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { join } from 'path'
 import type { FirewallRule, FirewallState } from '../../shared/types'
-import { isMacOS } from '../platform'
+import { isMacOS, isWindows } from '../platform'
 import { loadEnvironment, resolveMainAssetPath, resolvePathSetting } from '../app-paths'
 
 const execFileAsync = promisify(execFile)
@@ -18,13 +18,88 @@ function getParserPaths(): string[] {
     configuredParser ? resolvePathSetting(configuredParser) : null,
     resolveMainAssetPath('monitors', 'lulu-parser.py'),
     join(__dirname, '../../src/main/monitors/lulu-parser.py')
-  ].filter((value): value is string => Boolean(value))
+  ]
 
-  return [...new Set(candidates)]
+  return [...new Set(candidates.filter((value): value is string => Boolean(value)))]
 }
 
 let cachedState: FirewallState | null = null
 let cachedMtime: number = 0
+
+/**
+ * Parse Windows `netsh advfirewall firewall show rule name=all dir=in` output.
+ * Each rule block looks like:
+ *   Rule Name:                            Allow SSH
+ *   ----------------------------------------------------------------------
+ *   Enabled:                              Yes
+ *   Direction:                            In
+ *   Action:                               Allow
+ *   Program:                              C:\Windows\System32\OpenSSH\sshd.exe
+ */
+export function parseNetshFirewallOutput(raw: string): FirewallRule[] {
+  const rules: FirewallRule[] = []
+  const trimmed = raw.trim()
+  if (!trimmed) return rules
+
+  // Each rule starts at its "Rule Name:" line. The dashed separator that follows the name is
+  // not a block boundary, so split on the name line itself.
+  const blocks = trimmed.split(/^(?=Rule Name:)/im)
+
+  for (const block of blocks) {
+    const lines = block.trim().split(/\r?\n/)
+
+    // Scan for fields in this block
+    let ruleName = ''
+    let action = ''
+    let program = ''
+    let enabled = ''
+
+    for (const line of lines) {
+      const ruleNameMatch = line.match(/^Rule Name:\s*(.+)$/i)
+      if (ruleNameMatch) {
+        ruleName = ruleNameMatch[1].trim()
+        continue
+      }
+      const enabledMatch = line.match(/^Enabled:\s*(.+)$/i)
+      if (enabledMatch) {
+        enabled = enabledMatch[1].trim()
+        continue
+      }
+      const actionMatch = line.match(/^Action:\s*(.+)$/i)
+      if (actionMatch) {
+        action = actionMatch[1].trim()
+        continue
+      }
+      const programMatch = line.match(/^Program:\s*(.+)$/i)
+      if (programMatch) {
+        program = programMatch[1].trim()
+        continue
+      }
+    }
+
+    if (!ruleName || !action) continue
+    if (enabled.toLowerCase() === 'no') continue
+
+    // Derive name from program path or use rule name
+    let name = ruleName
+    if (program && program.toLowerCase() !== 'any') {
+      const parts = program.replace(/\\/g, '/').split('/')
+      name = parts[parts.length - 1] || ruleName
+    }
+
+    const ruleAction: 'allow' | 'block' =
+      action.toLowerCase() === 'block' ? 'block' : 'allow'
+
+    rules.push({
+      path: program && program.toLowerCase() !== 'any' ? program : ruleName,
+      name,
+      action: ruleAction,
+      type: 'user'
+    })
+  }
+
+  return rules
+}
 
 /**
  * Extract display name from a binary path.
@@ -105,7 +180,27 @@ export function parseLuluRulesJson(jsonOutput: string): FirewallRule[] {
  * Uses Python helper to parse NSKeyedArchiver binary plist, with XML fallback.
  * Caches result and only re-parses when the file's mtime changes.
  */
+async function getWindowsFirewallRules(): Promise<FirewallState> {
+  try {
+    const { stdout } = await execFileAsync(
+      'netsh',
+      ['advfirewall', 'firewall', 'show', 'rule', 'name=all', 'dir=in'],
+      { timeout: 15000 }
+    )
+    const rules = parseNetshFirewallOutput(stdout)
+    const totalAllowed = rules.filter((r) => r.action === 'allow').length
+    const totalBlocked = rules.filter((r) => r.action === 'block').length
+    return { rules, totalAllowed, totalBlocked, lastUpdated: Date.now() }
+  } catch {
+    return { rules: [], totalAllowed: 0, totalBlocked: 0, lastUpdated: Date.now() }
+  }
+}
+
 export async function getFirewallRules(): Promise<FirewallState> {
+  if (isWindows()) {
+    return getWindowsFirewallRules()
+  }
+
   if (!isMacOS()) {
     return { rules: [], totalAllowed: 0, totalBlocked: 0, lastUpdated: Date.now() }
   }

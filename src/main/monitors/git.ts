@@ -2,6 +2,7 @@ import { exec } from 'child_process'
 import { promisify } from 'util'
 import { existsSync } from 'fs'
 import { join } from 'path'
+import { isWindows } from '../platform'
 import type { GitRepoInfo, GitCommit, GitActionResult } from '../../shared/types'
 import { getAppRoot, loadEnvironment, resolvePathSetting } from '../app-paths'
 
@@ -72,7 +73,7 @@ async function getRepoInfo(repoPath: string): Promise<GitRepoInfo | null> {
 
     return {
       path: repoPath,
-      name: repoPath.split('/').pop() || repoPath,
+      name: repoPath.split(/[/\\]/).pop() || repoPath,
       branch,
       dirty,
       untracked,
@@ -92,12 +93,22 @@ export async function scanForRepos(scanDirs?: string[]): Promise<GitRepoInfo[]> 
 
   for (const dir of dirs) {
     try {
-      const { stdout } = await execAsync(`find "${dir}" -maxdepth 2 -name .git -type d 2>/dev/null`)
+      let stdout: string
+
+      if (isWindows()) {
+        const cmd = `powershell.exe -NoProfile -Command "Get-ChildItem -Path '${dir}' -Recurse -Depth 2 -Directory -Filter '.git' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName"`
+        const result = await execAsync(cmd, { timeout: 15000 })
+        stdout = result.stdout
+      } else {
+        const result = await execAsync(`find "${dir}" -maxdepth 2 -name .git -type d 2>/dev/null`)
+        stdout = result.stdout
+      }
+
       const repoPaths = stdout
         .trim()
         .split('\n')
         .filter((p) => p.length > 0)
-        .map((p) => p.replace(/\/.git$/, ''))
+        .map((p) => p.replace(/[/\\]\.git$/, ''))
       const results = await Promise.all(repoPaths.map(getRepoInfo))
       repos.push(...results.filter((r): r is GitRepoInfo => r !== null))
     } catch {
@@ -198,7 +209,7 @@ export async function getRepoCommitHistory(
   limit: number = 20
 ): Promise<GitCommit[]> {
   try {
-    const repoName = repoPath.split('/').pop() || repoPath
+    const repoName = repoPath.split(/[/\\]/).pop() || repoPath
     // limit is always a number from the app, repoPath comes from internal repo scanning
     const { stdout } = await execAsync(
       `git log --pretty=format:'%H|%an|%ae|%at|%s|%b§§§' -n ${limit}`,
