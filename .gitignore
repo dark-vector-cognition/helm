@@ -14,3 +14,6 @@ tasks/
 *.db
 *.sqlite-wal
 *.sqlite-shm
+
+# Editor and agent tool config
+.serena/
