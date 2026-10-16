@@ -374,7 +374,7 @@ function Header({
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-base font-semibold text-white tracking-[0.16em] font-[family-name:var(--helm-font-mono)]">HELM</h1>
-            <span className="text-[10px] shell-subtle font-[family-name:var(--helm-font-mono)]">V4</span>
+            <span className="text-[10px] shell-subtle font-[family-name:var(--helm-font-mono)]">V5</span>
           </div>
           <div className="text-[11px] shell-subtle">{health.label}</div>
         </div>
