@@ -392,6 +392,17 @@ describe('optional API key', () => {
     expect(buildAuthHeaders('https://saved.example.com', { lmStudioUrl: 'https://saved.example.com' })).toEqual({})
   })
 
+  it('ignores the environment key when LM_STUDIO_URL is not a URL', async () => {
+    process.env.LLM_API_KEY = 'env-key'
+    process.env.LM_STUDIO_URL = 'not a url'
+    loadConfig.mockReturnValue({ lmStudioUrl: HOSTED })
+    const { buildAuthHeaders, resolveApiKey } = await import('./lmstudio')
+
+    expect(resolveApiKey({})).toBeUndefined()
+    expect(buildAuthHeaders(HOSTED, { lmStudioUrl: HOSTED })).toEqual({})
+    expect(buildAuthHeaders('not a url', { lmStudioUrl: 'not a url' })).toEqual({})
+  })
+
   it('ignores the environment key when LM_STUDIO_URL is blank', async () => {
     process.env.LLM_API_KEY = 'env-key'
     process.env.LM_STUDIO_URL = '   '

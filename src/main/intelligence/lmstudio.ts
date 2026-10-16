@@ -3,7 +3,7 @@ import { exec } from 'child_process'
 import { promisify } from 'util'
 import type { LmStudioHealResult, LmStudioProbeAttempt } from '../../shared/types'
 import { loadConfig, saveConfig } from '../config'
-import { normalizeEndpointUrl } from '../endpoint-url'
+import { envKeyWithEndpoint, normalizeEndpointUrl } from '../endpoint-url'
 
 const DEFAULT_LM_STUDIO_URL = 'http://localhost:1234'
 const LOOPBACK_LM_STUDIO_URL = 'http://127.0.0.1:1234'
@@ -19,20 +19,9 @@ function normalizeLmStudioUrl(rawUrl: string): string | null {
 }
 
 /**
- * The key from LLM_API_KEY, or undefined. It counts only when LM_STUDIO_URL is also set, because
- * that pair is the user naming both the endpoint and the key for it in one place. A key in the
- * environment next to a URL saved through the app could otherwise be sent to a host the user
- * never paired it with. Never log the result.
- */
-function envKeyWithEndpoint(): { key: string; url: string } | undefined {
-  const key = process.env.LLM_API_KEY?.trim()
-  const url = normalizeLmStudioUrl(process.env.LM_STUDIO_URL || '')
-  return key && url ? { key, url } : undefined
-}
-
-/**
- * Optional API key for hosted OpenAI-compatible endpoints: LLM_API_KEY (only together with
- * LM_STUDIO_URL, and it wins over the file), else `apiKey` from the config file. Never log the result.
+ * Optional API key for hosted OpenAI-compatible endpoints: LLM_API_KEY (only together with an
+ * LM_STUDIO_URL that parses as a URL, and it wins over the file), else `apiKey` from the config
+ * file. Never log the result.
  */
 export function resolveApiKey(config: { apiKey?: string }): string | undefined {
   const fromEnv = envKeyWithEndpoint()?.key

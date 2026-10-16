@@ -8,7 +8,7 @@ import {
   resolveCommandOrPathSetting,
   resolvePathSetting
 } from './app-paths'
-import { normalizeEndpointUrl } from './endpoint-url'
+import { envKeyWithEndpoint, normalizeEndpointUrl } from './endpoint-url'
 
 const CONFIG_DIR = join(homedir(), '.config', 'helm')
 const LEGACY_CONFIG_DIR = join(homedir(), '.config', 'hydra')
@@ -181,13 +181,13 @@ function writeConfigFile(config: Partial<HelmConfig>): void {
 /**
  * The config as the renderer may see it. The raw API key never leaves the main process:
  * `apiKey` is always an empty string, and `hasApiKey` says whether a key is in effect: one stored
- * in the config file, or LLM_API_KEY when LM_STUDIO_URL is also set. An LLM_API_KEY without
- * LM_STUDIO_URL is ignored, so it does not count.
+ * in the config file, or LLM_API_KEY paired with an LM_STUDIO_URL that parses as a URL. That is the
+ * rule the model client uses (envKeyWithEndpoint), so an LLM_API_KEY that the client would ignore,
+ * with no LM_STUDIO_URL or one that is not a URL, does not count.
  */
 export function getRedactedConfig(): HelmConfig {
   const config = loadConfig()
-  const envKeyApplies = Boolean(process.env.LLM_API_KEY?.trim() && process.env.LM_STUDIO_URL?.trim())
-  const hasApiKey = Boolean(cleanApiKey(config.apiKey) || envKeyApplies)
+  const hasApiKey = Boolean(cleanApiKey(config.apiKey) || envKeyWithEndpoint())
   return { ...config, apiKey: '', hasApiKey }
 }
 
