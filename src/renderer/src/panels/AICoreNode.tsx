@@ -23,7 +23,7 @@ const MODE_THEME: Record<AICoreMode, {
   idle:       { label: 'HELM Awake', detail: 'The core is coherent and waiting for the next command.', shell: 'from-[#0a0800] via-[#0f0c04] to-[#050400]', border: 'border-amber-400/20', text: 'text-amber-200', glowColor: { r: 255, g: 210, b: 130 } },
   thinking:   { label: 'HELM Thinking', detail: 'Antennas extend as the model resolves context.', shell: 'from-[#0c0a02] via-[#100e06] to-[#060500]', border: 'border-amber-300/24', text: 'text-amber-100', glowColor: { r: 255, g: 220, b: 150 } },
   speaking:   { label: 'Briefing Ready', detail: 'Inference resolved. The entity brightens with the answer.', shell: 'from-[#0e0c04] via-[#121008] to-[#070600]', border: 'border-yellow-300/22', text: 'text-yellow-100', glowColor: { r: 255, g: 240, b: 180 } },
-  repairing:  { label: 'Repair Cycle Active', detail: 'Testing paths and rebuilding the LM Studio route.', shell: 'from-[#0d0800] via-[#100a04] to-[#060400]', border: 'border-orange-400/24', text: 'text-orange-200', glowColor: { r: 245, g: 180, b: 80 } },
+  repairing:  { label: 'Repair Cycle Active', detail: 'Testing paths and rebuilding the model route.', shell: 'from-[#0d0800] via-[#100a04] to-[#060400]', border: 'border-orange-400/24', text: 'text-orange-200', glowColor: { r: 245, g: 180, b: 80 } },
   offline:    { label: 'Core Isolated', detail: 'The entity is alive but the inference line is down.', shell: 'from-[#080604] via-[#0a0806] to-[#040302]', border: 'border-yellow-700/20', text: 'text-yellow-600', glowColor: { r: 140, g: 110, b: 70 } },
   throughput: { label: 'Throughput Mode', detail: 'Entity saturated. Antennas at maximum extension.', shell: 'from-[#0c0a04] via-[#100e08] to-[#060500]', border: 'border-yellow-200/22', text: 'text-yellow-100', glowColor: { r: 255, g: 245, b: 210 } }
 }
@@ -493,7 +493,7 @@ export function AICoreNode({
       <div className="rounded-[4px] border border-white/10 bg-black/25 p-3">
         <div className="grid gap-2 lg:grid-cols-2">
           <ActionNode label="Request Briefing" detail="Run the structured ops pass." accent="bg-amber-700/20 text-amber-200 hover:bg-amber-600/25" disabled={disabled} onClick={onRequestBriefing} />
-          <ActionNode label="Invoke Repair" detail="Probe and rebuild the LM Studio path." accent="bg-amber-700/20 text-amber-100 hover:bg-amber-600/25" disabled={disabled} onClick={onRepair} />
+          <ActionNode label="Invoke Repair" detail="Probe and rebuild the model connection." accent="bg-amber-700/20 text-amber-100 hover:bg-amber-600/25" disabled={disabled} onClick={onRepair} />
         </div>
       </div>
     </div>

@@ -45,7 +45,7 @@ const PAGE_COMMANDS: {
     page: 'ai',
     label: 'Open AI',
     aliases: ['lm studio', 'model', 'briefing', 'usage', 'cost'],
-    description: 'Jump to LM Studio control, briefings, and usage tracking'
+    description: 'Jump to the model connection, briefings, and usage tracking'
   },
   {
     page: 'radio',

@@ -42,6 +42,8 @@ export function BriefingPanel({ variant = 'compact' }: BriefingPanelProps): JSX.
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [lmStudioUrl, setLmStudioUrl] = useState<string>('http://localhost:1234')
+  // The model is optional. Until an endpoint is configured (or found), say so plainly.
+  const [modelConfigured, setModelConfigured] = useState(false)
   const [recentCoreMode, setRecentCoreMode] = useState<AICoreMode | null>(null)
   const [monoLattice, setMonoLattice] = useState(false)
   const coreTimerRef = useRef<number | null>(null)
@@ -66,7 +68,10 @@ export function BriefingPanel({ variant = 'compact' }: BriefingPanelProps): JSX.
 
   const refreshConfig = useCallback(async (): Promise<void> => {
     const cfg = await window.helm.getConfig()
-    if (cfg.lmStudioUrl) setLmStudioUrl(cfg.lmStudioUrl)
+    if (cfg.lmStudioUrl) {
+      setLmStudioUrl(cfg.lmStudioUrl)
+      setModelConfigured(true)
+    }
   }, [])
 
   useEffect(() => {
@@ -120,13 +125,16 @@ export function BriefingPanel({ variant = 'compact' }: BriefingPanelProps): JSX.
       const result = await window.helm.healLmStudio()
       if (result.url) setLmStudioUrl(result.url)
       if (result.success) {
+        setModelConfigured(true)
         setNotice(result.message)
         pulseCore('speaking')
+      } else if (!result.configured) {
+        setNotice(result.message)
       } else {
         setError(result.message)
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'LM Studio repair failed')
+      setError(err instanceof Error ? err.message : 'Model connection repair failed')
     } finally {
       setHealing(false)
       refreshConfig().catch(() => {})
@@ -165,7 +173,11 @@ export function BriefingPanel({ variant = 'compact' }: BriefingPanelProps): JSX.
   })()
 
   const isFull = variant === 'full'
-  const displayLmStudioUrl = privacyMode ? maskEndpoint(lmStudioUrl) : lmStudioUrl
+  const displayLmStudioUrl = !modelConfigured
+    ? 'No model configured (optional)'
+    : privacyMode
+      ? maskEndpoint(lmStudioUrl)
+      : lmStudioUrl
   const displayBriefing = useMemo(() => {
     if (!briefing) return null
     if (!privacyMode) return briefing
@@ -285,7 +297,9 @@ export function BriefingPanel({ variant = 'compact' }: BriefingPanelProps): JSX.
         <div
           className="text-gray-600 text-xs flex-1 flex items-center justify-center"
         >
-          Press the button or Cmd+B for a Local AI (LM Studio) briefing
+          {modelConfigured
+            ? 'Press the button or Cmd+B for an AI briefing'
+            : 'No model configured. HELM works without one. Set LM_STUDIO_URL to any OpenAI-compatible server to enable AI briefings.'}
         </div>
       )}
 

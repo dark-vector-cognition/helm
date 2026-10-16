@@ -1,6 +1,12 @@
-import { describe, it, expect } from 'vitest'
-import { buildBriefingPrompt, parseBriefingResponse } from './briefing'
-import type { SystemState } from '../../shared/types'
+import { describe, it, expect, vi } from 'vitest'
+import { buildBriefingPrompt, buildNoModelBriefing, generateBriefing, parseBriefingResponse } from './briefing'
+import type { LmStudioHealResult, SystemState } from '../../shared/types'
+import { healLmStudioConnection } from './lmstudio'
+
+vi.mock('./lmstudio', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./lmstudio')>()),
+  healLmStudioConnection: vi.fn()
+}))
 
 const mockState: SystemState = {
   timestamp: Date.now(),
@@ -131,5 +137,43 @@ describe('parseBriefingResponse', () => {
     const raw = '```json\n{"summary":"test","alerts":[],"suggestions":[]}\n```'
     const result = parseBriefingResponse(raw)
     expect(result.raw).toBe(raw)
+  })
+})
+
+describe('generateBriefing without a model', () => {
+  const unconfigured: LmStudioHealResult = {
+    success: false,
+    repaired: false,
+    configured: false,
+    message: 'No model configured.',
+    attempts: []
+  }
+
+  it('returns a quiet no-model briefing instead of a warning when nothing is configured', async () => {
+    vi.mocked(healLmStudioConnection).mockResolvedValueOnce(unconfigured)
+
+    const result = await generateBriefing(mockState)
+
+    expect(result.summary).toContain('No model configured')
+    expect(result.alerts).toEqual([])
+    expect(result.suggestions.length).toBeGreaterThan(0)
+    expect(result.error).toBeUndefined()
+  })
+
+  it('still warns when a configured endpoint cannot be reached', async () => {
+    vi.mocked(healLmStudioConnection).mockResolvedValueOnce({
+      ...unconfigured,
+      configured: true,
+      message: 'LM Studio is unreachable. Checked http://10.0.0.9:1234.'
+    })
+
+    const result = await generateBriefing(mockState)
+
+    expect(result.alerts).toHaveLength(1)
+    expect(result.alerts[0].severity).toBe('warning')
+  })
+
+  it('builds the no-model briefing with the given timestamp', () => {
+    expect(buildNoModelBriefing(42).timestamp).toBe(42)
   })
 })

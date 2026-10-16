@@ -5,6 +5,10 @@ import type { LmStudioHealResult, LmStudioProbeAttempt } from '../../shared/type
 import { loadConfig, saveConfig } from '../config'
 
 const DEFAULT_LM_STUDIO_URL = 'http://localhost:1234'
+const LOOPBACK_LM_STUDIO_URL = 'http://127.0.0.1:1234'
+
+export const NO_MODEL_MESSAGE =
+  'No model configured. HELM works without one. To turn on AI briefings, set LM_STUDIO_URL to any OpenAI-compatible server.'
 const MODEL_DISCOVERY_TIMEOUT_MS = 1500
 const ARP_TIMEOUT_MS = 1500
 const execAsync = promisify(exec)
@@ -28,6 +32,10 @@ function normalizeLmStudioUrl(rawUrl: string): string | null {
   } catch {
     return null
   }
+}
+
+function hasConfiguredEndpoint(configuredUrl: string | undefined): boolean {
+  return Boolean((configuredUrl || '').trim() || (process.env.LM_STUDIO_URL || '').trim())
 }
 
 export function isLmStudioConnectivityError(message: string): boolean {
@@ -122,11 +130,16 @@ async function buildCandidateUrls(): Promise<{ priority: string[]; subnet: strin
   const configured = normalizeLmStudioUrl(config.lmStudioUrl || '')
   const envUrl = normalizeLmStudioUrl(process.env.LM_STUDIO_URL || '')
 
+  if (!hasConfiguredEndpoint(config.lmStudioUrl)) {
+    // No model configured: only look on this machine. Never probe the LAN unprompted.
+    return { priority: [DEFAULT_LM_STUDIO_URL, LOOPBACK_LM_STUDIO_URL], subnet: [] }
+  }
+
   const priority = [
     configured,
     envUrl,
     DEFAULT_LM_STUDIO_URL,
-    'http://127.0.0.1:1234'
+    LOOPBACK_LM_STUDIO_URL
   ].filter((value): value is string => Boolean(value))
 
   for (const ip of getLocalIPv4s()) {
@@ -239,6 +252,7 @@ export async function healLmStudioConnection(options?: {
   const fetchImpl = options?.fetchImpl || fetch
   const config = loadConfig()
   const configuredValue = (config.lmStudioUrl || process.env.LM_STUDIO_URL || '').trim()
+  const configured = hasConfiguredEndpoint(config.lmStudioUrl)
   const previousUrl = normalizeLmStudioUrl(configuredValue)
   const previousLabel = previousUrl || configuredValue || undefined
   const attempts: LmStudioProbeAttempt[] = []
@@ -258,6 +272,7 @@ export async function healLmStudioConnection(options?: {
     return {
       success: true,
       repaired,
+      configured,
       message: repaired
         ? `LM Studio endpoint repaired: ${previousLabel} -> ${probe.url}`
         : `LM Studio reachable at ${probe.url}`,
@@ -281,6 +296,7 @@ export async function healLmStudioConnection(options?: {
       return {
         success: true,
         repaired,
+        configured,
         message: repaired
           ? `LM Studio endpoint repaired: ${previousLabel} -> ${subnetScan.success.url}`
           : `LM Studio reachable at ${subnetScan.success.url}`,
@@ -292,6 +308,10 @@ export async function healLmStudioConnection(options?: {
     }
   }
 
+  if (!configured) {
+    return { success: false, repaired: false, configured, message: NO_MODEL_MESSAGE, attempts }
+  }
+
   const attemptedUrls = attempts.map((attempt) => attempt.url).join(', ')
   const remoteHint =
     previousLabel && /^https?:\/\/(?!localhost|127\.0\.0\.1)/.test(previousLabel)
@@ -301,6 +321,7 @@ export async function healLmStudioConnection(options?: {
   return {
     success: false,
     repaired: false,
+    configured,
     message: attemptedUrls
       ? `LM Studio is unreachable. Checked ${attemptedUrls}.${remoteHint}`
       : `LM Studio is unreachable.${remoteHint}`,

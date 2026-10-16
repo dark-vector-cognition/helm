@@ -225,7 +225,7 @@ app.whenReady().then(() => {
 
   // Log active config
   const config = loadConfig()
-  console.log('[config] LM Studio URL:', config.lmStudioUrl || process.env.LM_STUDIO_URL || 'http://localhost:1234')
+  console.log('[config] Model endpoint:', config.lmStudioUrl || process.env.LM_STUDIO_URL || 'none (optional)')
 
   // Initialize SQLite database
   getDb()
