@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import type { BriefingResult, BriefingAlert, YenneferStyle } from '../../../shared/types'
+import type { BriefingResult, BriefingAlert } from '../../../shared/types'
 import { useSystemStore } from '../stores/system'
 import { maskEndpoint, redactSensitiveText, usePrivacyStore } from '../stores/privacy'
 import { AICoreNode, type AICoreMode } from './AICoreNode'
@@ -21,9 +21,9 @@ const SOURCE_TAG_STYLES: Record<string, string> = {
 }
 
 const MODE_LABELS: Record<AICoreMode, string> = {
-  idle: 'Hydra Awake',
-  thinking: 'Hydra Thinking',
-  speaking: 'Yennefer Live',
+  idle: 'HELM Awake',
+  thinking: 'HELM Thinking',
+  speaking: 'Briefing Ready',
   repairing: 'Repairing',
   offline: 'Isolated',
   throughput: 'Throughput'
@@ -38,14 +38,10 @@ export function BriefingPanel({ variant = 'compact' }: BriefingPanelProps): JSX.
   const privacyMode = usePrivacyStore((s) => s.privacyMode)
   const [briefing, setBriefing] = useState<BriefingResult | null>(null)
   const [loading, setLoading] = useState(false)
-  const [yenneferLoading, setYenneferLoading] = useState(false)
   const [healing, setHealing] = useState(false)
-  const [savingStyle, setSavingStyle] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [lmStudioUrl, setLmStudioUrl] = useState<string>('http://localhost:1234')
-  const [yenneferEnabled, setYenneferEnabled] = useState(true)
-  const [yenneferStyle, setYenneferStyle] = useState<YenneferStyle>('adaptive')
   const [recentCoreMode, setRecentCoreMode] = useState<AICoreMode | null>(null)
   const [monoLattice, setMonoLattice] = useState(false)
   const coreTimerRef = useRef<number | null>(null)
@@ -71,8 +67,6 @@ export function BriefingPanel({ variant = 'compact' }: BriefingPanelProps): JSX.
   const refreshConfig = useCallback(async (): Promise<void> => {
     const cfg = await window.helm.getConfig()
     if (cfg.lmStudioUrl) setLmStudioUrl(cfg.lmStudioUrl)
-    if (cfg.yenneferEnabled === false) setYenneferEnabled(false)
-    if (cfg.yenneferStyle) setYenneferStyle(cfg.yenneferStyle)
   }, [])
 
   useEffect(() => {
@@ -139,55 +133,12 @@ export function BriefingPanel({ variant = 'compact' }: BriefingPanelProps): JSX.
     }
   }, [refreshConfig])
 
-  const invokeYennefer = useCallback(async (): Promise<void> => {
-    setYenneferLoading(true)
-    setError(null)
-    setNotice(null)
-    try {
-      const result = await window.helm.requestYennefer()
-      if (result) {
-        setBriefing(result)
-        pulseCore('speaking')
-      } else {
-        setError('No system state available yet')
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Yennefer invocation failed')
-    } finally {
-      setYenneferLoading(false)
-      refreshConfig().catch(() => {})
-    }
-  }, [refreshConfig])
-
   useEffect(() => {
     const unsub = window.helm.onBriefingShortcut(() => {
       requestBriefing()
     })
     return unsub
   }, [requestBriefing])
-
-  useEffect(() => {
-    const unsub = window.helm.onYenneferShortcut(() => {
-      invokeYennefer()
-    })
-    return unsub
-  }, [invokeYennefer])
-
-  const updateYenneferStyle = useCallback(async (nextStyle: YenneferStyle): Promise<void> => {
-    setYenneferStyle(nextStyle)
-    setSavingStyle(true)
-    setNotice(null)
-    setError(null)
-    try {
-      const current = await window.helm.getConfig()
-      await window.helm.saveConfig({ ...current, yenneferStyle: nextStyle })
-      setNotice(`Yennefer lens set to ${nextStyle}.`)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save Yennefer lens')
-    } finally {
-      setSavingStyle(false)
-    }
-  }, [])
 
   const coreMode: AICoreMode = (() => {
     const lowerError = error?.toLowerCase() || ''
@@ -200,12 +151,12 @@ export function BriefingPanel({ variant = 'compact' }: BriefingPanelProps): JSX.
       lowerSummary.includes('unable to reach')
 
     if (healing) return 'repairing'
-    if (loading || yenneferLoading) return 'thinking'
+    if (loading) return 'thinking'
     if (lmStudioOffline) return 'offline'
     if (recentCoreMode) return recentCoreMode
 
     const throughputReady =
-      (yenneferStyle === 'throughput' || activeAgents >= 3 || totalAgents >= 4) &&
+      (activeAgents >= 3 || totalAgents >= 4) &&
       cpuUsage < 80 &&
       (memoryUsage < 94 || (systemState?.memory.free || 0) / 1e9 >= 2.5)
 
@@ -235,7 +186,7 @@ export function BriefingPanel({ variant = 'compact' }: BriefingPanelProps): JSX.
 
   return (
     <div className={isFull ? 'space-y-3 text-sm' : 'h-full flex flex-col text-sm'}>
-      {variant === 'full' && yenneferEnabled ? (
+      {variant === 'full' ? (
         <div className="pb-4">
           <AICoreNode
             mode={coreMode}
@@ -245,20 +196,16 @@ export function BriefingPanel({ variant = 'compact' }: BriefingPanelProps): JSX.
             cpuUsage={cpuUsage}
             memoryUsage={memoryUsage}
             listenerCount={listenerCount}
-            yenneferStyle={yenneferStyle}
             lmStudioUrl={displayLmStudioUrl}
             privacyMode={privacyMode}
-            disabled={loading || yenneferLoading || healing}
+            disabled={loading || healing}
             processes={systemState?.processes}
             agents={systemState?.agents}
             ports={systemState?.ports}
             gitRepos={systemState?.gitRepos}
             onRequestBriefing={requestBriefing}
             onRepair={healLmStudio}
-            onInvokeYennefer={invokeYennefer}
             onToggleMono={() => setMonoLattice((m) => !m)}
-            onSetYenneferStyle={updateYenneferStyle}
-            lensDisabled={savingStyle || yenneferLoading}
           />
         </div>
       ) : (
@@ -266,27 +213,18 @@ export function BriefingPanel({ variant = 'compact' }: BriefingPanelProps): JSX.
           <div className="flex items-center gap-2">
             <button
               onClick={requestBriefing}
-              disabled={loading || yenneferLoading || healing}
+              disabled={loading || healing}
               className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded transition-colors font-medium"
             >
               {loading ? 'Generating...' : 'Request Briefing'}
             </button>
             <button
               onClick={healLmStudio}
-              disabled={loading || yenneferLoading || healing}
+              disabled={loading || healing}
               className="px-3 py-1.5 text-xs bg-emerald-700 hover:bg-emerald-600 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded transition-colors font-medium"
             >
               {healing ? 'Repairing...' : 'Invoke Repair'}
             </button>
-            {yenneferEnabled && (
-              <button
-                onClick={invokeYennefer}
-                disabled={loading || yenneferLoading || healing}
-                className="px-3 py-1.5 text-xs bg-violet-600 hover:bg-violet-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded transition-colors font-medium"
-              >
-                {yenneferLoading ? 'Channeling...' : '\u2694\uFE0F Invoke Yennefer'}
-              </button>
-            )}
           </div>
           <div className="flex items-center gap-2 rounded-full border border-white/10 bg-black/20 px-2.5 py-1">
             <span
@@ -303,7 +241,7 @@ export function BriefingPanel({ variant = 'compact' }: BriefingPanelProps): JSX.
               }`}
             />
             <span className="text-[10px] uppercase tracking-[0.26em] text-gray-400">
-              {coreMode === 'throughput' ? 'Hydra Alive' : MODE_LABELS[coreMode]}
+              {coreMode === 'throughput' ? 'HELM Alive' : MODE_LABELS[coreMode]}
             </span>
           </div>
         </div>
@@ -337,28 +275,6 @@ export function BriefingPanel({ variant = 'compact' }: BriefingPanelProps): JSX.
               </span>
             )}
           </div>
-
-          {yenneferEnabled && (
-            <div className="flex items-center justify-between gap-3 pb-3">
-              <div>
-                <div className="text-[10px] uppercase tracking-wider text-gray-500">Yennefer Lens</div>
-                <div className="text-[11px] text-gray-600">
-                  Throughput treats dense work as intentional. Creative varies the read.
-                </div>
-              </div>
-              <select
-                value={yenneferStyle}
-                disabled={savingStyle || yenneferLoading}
-                onChange={(e) => updateYenneferStyle(e.target.value as YenneferStyle)}
-                className="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-gray-200 disabled:text-gray-500"
-              >
-                <option value="adaptive">Adaptive</option>
-                <option value="throughput">Throughput</option>
-                <option value="creative">Creative</option>
-                <option value="strict">Strict</option>
-              </select>
-            </div>
-          )}
         </>
       )}
 

@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync, copyFileSync } from
 import { join } from 'path'
 import { homedir } from 'os'
 import type { HelmConfig } from '../shared/types'
-import type { HiveConfig, YenneferStyle } from '../shared/types'
+import type { HiveConfig } from '../shared/types'
 import {
   loadEnvironment,
   resolveCommandOrPathSetting,
@@ -17,20 +17,12 @@ const DEFAULT_CONFIG: HelmConfig = {
   gitRepoPaths: [],
   monitorInterval: 2000,
   snapshotInterval: 30000,
-  yenneferStyle: 'adaptive',
   vaultRagEndpoint: 'http://127.0.0.1:8742',
   vaultPath: join(homedir(), 'Documents', 'ai', 'obsidian-vault'),
   vaultRagLocation: 'local',
   vaultRagRemoteHost: '',
   vaultRagAutoCheck: true
 }
-
-const VALID_YENNEFER_STYLES = new Set<YenneferStyle>([
-  'adaptive',
-  'throughput',
-  'creative',
-  'strict'
-])
 
 export function getConfigPath(): string {
   return join(CONFIG_DIR, CONFIG_FILE)
@@ -104,10 +96,6 @@ function applyEnvOverrides(config: HelmConfig): HelmConfig {
   const envNetworkTarget = process.env.HELM_NETWORK_TARGET?.trim()
   const envMonitorInterval = parsePositiveIntEnv('HELM_MONITOR_INTERVAL_MS')
   const envSnapshotInterval = parsePositiveIntEnv('HELM_SNAPSHOT_INTERVAL_MS')
-  const envYenneferEnabled = parseBooleanEnv('HELM_YENNEFER_ENABLED')
-  const envYenneferStyle = process.env.HELM_YENNEFER_STYLE?.trim() as
-    | YenneferStyle
-    | undefined
   const envHiveEnabled = parseBooleanEnv('HELM_HIVE_ENABLED')
   const envHiveSharedContextPath = parsePathEnv('HELM_HIVE_SHARED_CONTEXT_PATH')
   const envHiveSessionPrefix = process.env.HELM_HIVE_SESSION_PREFIX?.trim()
@@ -124,10 +112,6 @@ function applyEnvOverrides(config: HelmConfig): HelmConfig {
   if (envNetworkTarget) nextConfig.networkTarget = envNetworkTarget
   if (envMonitorInterval) nextConfig.monitorInterval = envMonitorInterval
   if (envSnapshotInterval) nextConfig.snapshotInterval = envSnapshotInterval
-  if (envYenneferEnabled !== undefined) nextConfig.yenneferEnabled = envYenneferEnabled
-  if (envYenneferStyle && VALID_YENNEFER_STYLES.has(envYenneferStyle)) {
-    nextConfig.yenneferStyle = envYenneferStyle
-  }
 
   if (
     envHiveEnabled !== undefined ||

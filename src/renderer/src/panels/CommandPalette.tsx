@@ -44,7 +44,7 @@ const PAGE_COMMANDS: {
   {
     page: 'ai',
     label: 'Open AI',
-    aliases: ['lm studio', 'briefing', 'yennefer', 'usage', 'cost'],
+    aliases: ['lm studio', 'model', 'briefing', 'usage', 'cost'],
     description: 'Jump to LM Studio control, briefings, and usage tracking'
   },
   {
@@ -158,7 +158,7 @@ export function CommandPalette({
     })
 
     // HIVE commands
-    const hiveRoles = ['architect', 'builder', 'analyst', 'ops', 'strategist'] as const
+    const hiveRoles = ['architect', 'builder', 'analyst', 'ops'] as const
     for (const role of hiveRoles) {
       commands.push({
         id: `hive-launch-${role}`,
