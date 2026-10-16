@@ -184,26 +184,6 @@ export interface FirewallState {
   lastUpdated: number
 }
 
-export interface SecurityScanResult {
-  id: string
-  command: string
-  output: string
-  timestamp: number
-  status: 'running' | 'complete' | 'error'
-}
-
-export interface SecurityPosture {
-  overallScore: number
-  grade: string
-  verdict: string
-  categories: {
-    name: string
-    score: number
-    weight: number
-    summary: string
-  }[]
-}
-
 export interface DiskMount {
   filesystem: string
   mount: string
@@ -408,9 +388,6 @@ export const IPC_CHANNELS = {
   NETWORK_STATE: 'network:state',
   FIREWALL_STATE: 'firewall:state',
   GET_FIREWALL_RULES: 'firewall:get-rules',
-  SECURITY_SCAN_REQUEST: 'security:scan-request',
-  SECURITY_SCAN_RESULT: 'security:scan-result',
-  SECURITY_POSTURE: 'security:posture',
   DB_QUERY_SNAPSHOTS: 'db:query-snapshots',
   DB_QUERY_ALERTS: 'db:query-alerts',
   DB_QUERY_BRIEFINGS: 'db:query-briefings',
@@ -421,7 +398,6 @@ export const IPC_CHANNELS = {
   CONFIG_SAVE: 'config:save',
   CONFIG_CLEAR_API_KEY: 'config:clear-api-key',
   GIT_COMMIT_HISTORY: 'git:commit-history',
-  DB_QUERY_POSTURE_HISTORY: 'db:query-posture-history',
   GIT_ACTION: 'git:action',
   PROCESS_KILL: 'process:kill',
   PROCESS_SIGNAL: 'process:signal',
@@ -488,13 +464,6 @@ export interface GitCommit {
   isAiAuthored: boolean
   aiAgent?: string
   repoName: string
-}
-
-export interface PostureHistoryEntry {
-  timestamp: number
-  score: number
-  grade: string
-  verdict: string
 }
 
 export interface SkillUpdate {
@@ -618,9 +587,7 @@ export interface HelmConfig {
   gitRepoPaths: string[]
   monitorInterval: number
   snapshotInterval: number
-  staffBinPath?: string
   lmStudioUrl?: string
-  networkTarget?: string
   agentPatterns?: { type: string; displayName: string; patterns: string[] }[]
   agentFeedPaths?: string[]
   logFilePaths?: string[]

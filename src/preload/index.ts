@@ -9,11 +9,8 @@ import type {
   LmStudioHealResult,
   NetworkState,
   FirewallState,
-  SecurityScanResult,
-  SecurityPosture,
   HelmConfig,
   GitCommit,
-  PostureHistoryEntry,
   GitActionResult,
   ProcessSignalType,
   ProcessActionResult,
@@ -118,27 +115,6 @@ const api = {
   getFirewallRules: (): Promise<FirewallState> =>
     ipcRenderer.invoke(IPC_CHANNELS.GET_FIREWALL_RULES),
 
-  requestSecurityScan: (command: string): Promise<SecurityScanResult> =>
-    ipcRenderer.invoke(IPC_CHANNELS.SECURITY_SCAN_REQUEST, command),
-
-  onSecurityScanResult: (callback: (result: SecurityScanResult) => void): (() => void) => {
-    const handler = (_event: Electron.IpcRendererEvent, result: SecurityScanResult): void =>
-      callback(result)
-    ipcRenderer.on(IPC_CHANNELS.SECURITY_SCAN_RESULT, handler)
-    return (): void => {
-      ipcRenderer.removeListener(IPC_CHANNELS.SECURITY_SCAN_RESULT, handler)
-    }
-  },
-
-  onSecurityPosture: (callback: (posture: SecurityPosture) => void): (() => void) => {
-    const handler = (_event: Electron.IpcRendererEvent, posture: SecurityPosture): void =>
-      callback(posture)
-    ipcRenderer.on(IPC_CHANNELS.SECURITY_POSTURE, handler)
-    return (): void => {
-      ipcRenderer.removeListener(IPC_CHANNELS.SECURITY_POSTURE, handler)
-    }
-  },
-
   querySnapshots: (limit: number): Promise<DBSnapshot[]> =>
     ipcRenderer.invoke(IPC_CHANNELS.DB_QUERY_SNAPSHOTS, limit),
 
@@ -167,9 +143,6 @@ const api = {
 
   getCommitHistory: (repoPath: string, limit: number): Promise<GitCommit[]> =>
     ipcRenderer.invoke(IPC_CHANNELS.GIT_COMMIT_HISTORY, repoPath, limit),
-
-  queryPostureHistory: (limit: number): Promise<PostureHistoryEntry[]> =>
-    ipcRenderer.invoke(IPC_CHANNELS.DB_QUERY_POSTURE_HISTORY, limit),
 
   runGitAction: (repoPath: string, action: string): Promise<GitActionResult> =>
     ipcRenderer.invoke(IPC_CHANNELS.GIT_ACTION, repoPath, action),

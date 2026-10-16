@@ -24,7 +24,6 @@ import { getNetworkActivity } from './network'
 import { getFirewallRules } from './firewall'
 import { getDiskUsage } from './disk'
 import { getBatteryStatus } from './battery'
-import { runSecurityScan, extractPosture } from '../intelligence/security'
 import { getCCUsage } from './ccusage'
 import { buildMonitorTickThresholds, resolveMonitorInterval } from './schedule'
 import { showDesktopNotification } from '../notifications'
@@ -535,22 +534,6 @@ export function startMonitoring(mainWindow: BrowserWindow, intervalMs?: number):
     return runGitAction(repoPath, action)
   })
 
-  ipcMain.handle(IPC_CHANNELS.SECURITY_SCAN_REQUEST, async (_event, command: string) => {
-    const result = await runSecurityScan(command)
-    if (!mainWindow.isDestroyed()) {
-      mainWindow.webContents.send(IPC_CHANNELS.SECURITY_SCAN_RESULT, result)
-
-      // After a successful survey scan, send posture update to renderer
-      if (command === 'survey' && result.status === 'complete') {
-        const posture = extractPosture()
-        if (posture) {
-          mainWindow.webContents.send(IPC_CHANNELS.SECURITY_POSTURE, posture)
-        }
-      }
-    }
-    return result
-  })
-
   ipcMain.handle(IPC_CHANNELS.PROCESS_KILL, async (_event, pid: number, expectedName?: string) => {
     return killProcess(pid, expectedName)
   })
@@ -619,7 +602,6 @@ export function stopMonitoring(): void {
   ipcMain.removeAllListeners(IPC_CHANNELS.DISMISS_NOTIFICATION)
   ipcMain.removeHandler(IPC_CHANNELS.GET_FIREWALL_RULES)
   ipcMain.removeHandler(IPC_CHANNELS.GIT_ACTION)
-  ipcMain.removeHandler(IPC_CHANNELS.SECURITY_SCAN_REQUEST)
   ipcMain.removeHandler(IPC_CHANNELS.PROCESS_KILL)
   ipcMain.removeHandler(IPC_CHANNELS.PROCESS_SIGNAL)
   ipcMain.removeHandler(IPC_CHANNELS.PROCESS_KILL_GROUP)

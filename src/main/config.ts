@@ -92,8 +92,6 @@ function applyEnvOverrides(config: HelmConfig): HelmConfig {
   const envGitRepoPaths = parseListEnv('HELM_GIT_REPO_PATHS')
   const envAgentFeedPaths = parseListEnv('HELM_AGENT_FEED_PATHS')
   const envLogFilePaths = parseListEnv('HELM_LOG_FILE_PATHS')
-  const envStaffBinPath = parseCommandOrPathEnv('HELM_STAFF_BIN_PATH')
-  const envNetworkTarget = process.env.HELM_NETWORK_TARGET?.trim()
   const envMonitorInterval = parsePositiveIntEnv('HELM_MONITOR_INTERVAL_MS')
   const envSnapshotInterval = parsePositiveIntEnv('HELM_SNAPSHOT_INTERVAL_MS')
   const envHiveEnabled = parseBooleanEnv('HELM_HIVE_ENABLED')
@@ -108,8 +106,6 @@ function applyEnvOverrides(config: HelmConfig): HelmConfig {
   if (envGitRepoPaths) nextConfig.gitRepoPaths = envGitRepoPaths
   if (envAgentFeedPaths) nextConfig.agentFeedPaths = envAgentFeedPaths
   if (envLogFilePaths) nextConfig.logFilePaths = envLogFilePaths
-  if (envStaffBinPath) nextConfig.staffBinPath = envStaffBinPath
-  if (envNetworkTarget) nextConfig.networkTarget = envNetworkTarget
   if (envMonitorInterval) nextConfig.monitorInterval = envMonitorInterval
   if (envSnapshotInterval) nextConfig.snapshotInterval = envSnapshotInterval
 

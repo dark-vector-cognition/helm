@@ -1,13 +1,13 @@
 # HELM Operator Walkthrough
 
-HELM is a page-based desktop shell for watching local AI systems, repo drift, agents, and machine posture without collapsing all of it into one screaming dashboard. This guide covers the 5.0 shell (Helm Light).
+HELM is a page-based desktop shell for watching local AI systems, repo drift, agents, and machine load without collapsing all of it into one screaming dashboard. This guide covers the 5.0 shell (Helm Light).
 
 ## Shell Layout
 
 HELM keeps a few things visible no matter which page you are on:
 
 - The top header carries the operator wire, `Secure View`, skin selection, and a manual `Refresh` action.
-- The scorecards strip keeps machine posture visible without forcing every tab to duplicate CPU, memory, network, agents, ports, repos, disk, and battery summaries.
+- The scorecards strip keeps machine load visible without forcing every tab to duplicate CPU, memory, network, agents, ports, repos, disk, and battery summaries.
 - The left navigation rail is the page contract of the app. If a surface has its own page, it should not also be squatting somewhere else.
 - The shell skin selector lets you swap between `Deck`, `Orbiter`, `Forge`, and `Phantom` without breaking the shared chrome language.
 - `Secure View` is the demo-safe switch. It redacts local endpoints, peer IPs, and filesystem paths across visible operator surfaces.
@@ -19,7 +19,7 @@ HELM keeps a few things visible no matter which page you are on:
 
 Use `Bridge` when you want the fastest read on what changed and where to drill next.
 
-- Keeps attention on posture, hotspots, notifications, and the compact briefing layer.
+- Keeps attention on load, hotspots, notifications, and the compact briefing layer.
 - It is overview-only by design.
 
 ### Fleet
@@ -38,10 +38,10 @@ Use `Swarm` when you want the real agent roster instead of a vague badge.
 
 ### Grid
 
-Use `Grid` for infrastructure posture and network visibility.
+Use `Grid` for network and port visibility.
 
 - The traffic grid turns live connections into scoped `loopback`, `LAN`, and `internet` topology.
-- Ports and the security posture live here instead of being repeated elsewhere.
+- Listening ports live here instead of being repeated elsewhere.
 
 ### AI
 
@@ -124,7 +124,7 @@ Click Refresh in the header or use the tray menu's Refresh Now. Forces a new mon
 
 HELM keeps local state instead of pretending everything is ephemeral:
 
-- SQLite stores snapshots, alerts, briefings, notifications, posture history, timeline events, and log history.
+- SQLite stores snapshots, alerts, briefings, notifications, timeline events, and log history.
 - Config lives at `~/.config/helm/config.json`.
 - Agent registry lives at `~/.config/helm/agent-registry.json`.
 - `.env` can override local development settings such as `LM_STUDIO_URL`. Leave it unset to run with no model.
@@ -136,7 +136,7 @@ If you are using HELM as intended, the normal loop is:
 1. Start in `Bridge`.
 2. Follow the signal to `Fleet`, `Swarm`, `Grid`, `AI`, `Vault`, `Radio`, or `Logs`.
 3. Use the page-local actions instead of trying to solve everything from the top layer.
-4. Come back to `Bridge` when you want posture again instead of detail.
+4. Come back to `Bridge` when you want the overview again instead of detail.
 5. Use `Registry` when you want the historical archive instead of the live operating picture.
 
 That is the whole point of the shell. The side nav is not decorative. It is how the app avoids turning back into a giant panel graveyard.

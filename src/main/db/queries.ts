@@ -5,8 +5,6 @@ import type {
   AutoHealEvent,
   BriefingResult,
   HelmNotification,
-  SecurityPosture,
-  PostureHistoryEntry,
   TimelineEventRecord,
   LogLine
 } from '../../shared/types'
@@ -132,13 +130,6 @@ export function dismissNotification(id: string): void {
   db.prepare('UPDATE notifications SET dismissed = 1 WHERE id = ?').run(id)
 }
 
-export function insertPostureHistory(posture: SecurityPosture): void {
-  const db = getDb()
-  db.prepare(
-    'INSERT INTO posture_history (timestamp, score, grade, verdict) VALUES (?, ?, ?, ?)'
-  ).run(Date.now(), posture.overallScore, posture.grade, posture.verdict)
-}
-
 export function insertLogLines(lines: LogLine[]): void {
   if (lines.length === 0) return
   const db = getDb()
@@ -173,21 +164,6 @@ export function pruneOldLogLines(maxRows = 10000): void {
   db.prepare(
     'DELETE FROM logs WHERE id NOT IN (SELECT id FROM logs ORDER BY timestamp DESC, id DESC LIMIT ?)'
   ).run(maxRows)
-}
-
-export function getPostureHistory(limit: number): PostureHistoryEntry[] {
-  const db = getDb()
-  const rows = db
-    .prepare(
-      'SELECT timestamp, score, grade, verdict FROM posture_history ORDER BY timestamp DESC, id DESC LIMIT ?'
-    )
-    .all(limit) as { timestamp: number; score: number; grade: string; verdict: string }[]
-  return rows.map((row) => ({
-    timestamp: row.timestamp,
-    score: row.score,
-    grade: row.grade,
-    verdict: row.verdict
-  }))
 }
 
 export interface SessionSnapshot {

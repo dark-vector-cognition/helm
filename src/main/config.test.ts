@@ -31,7 +31,7 @@ describe('config defaults', () => {
     expect(defaults.snapshotInterval).toBe(30000)
     expect(defaults.gitRepoPaths).toEqual([])
     expect(defaults.apiKey).toBeUndefined()
-    expect(defaults.staffBinPath).toBeUndefined()
+    expect(defaults.lmStudioUrl).toBeUndefined()
   })
 
   it('merging partial config with defaults fills in missing fields', () => {
@@ -67,7 +67,6 @@ describe('config JSON serialization', () => {
       gitRepoPaths: ['/home/test/repo1'],
       monitorInterval: 3000,
       snapshotInterval: 60000,
-      staffBinPath: '/usr/local/bin/staff',
       radioHomeLocation: {
         label: 'Home base',
         latitude: 29.7,
@@ -86,7 +85,6 @@ describe('config JSON serialization', () => {
     expect(parsed.gitRepoPaths).toEqual(['/home/test/repo1'])
     expect(parsed.monitorInterval).toBe(3000)
     expect(parsed.snapshotInterval).toBe(60000)
-    expect(parsed.staffBinPath).toBe('/usr/local/bin/staff')
     expect(parsed.radioHomeLocation).toEqual({
       label: 'Home base',
       latitude: 29.7,
