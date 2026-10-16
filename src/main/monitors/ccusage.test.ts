@@ -1,7 +1,7 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('os', () => ({
-  homedir: vi.fn(() => '/Users/testuser')
+  homedir: vi.fn(() => '/home/testuser')
 }))
 
 vi.mock('fs', () => ({
@@ -19,8 +19,8 @@ const mockReadFileSync = vi.mocked(readFileSync)
 const mockReaddirSync = vi.mocked(readdirSync)
 const mockStatSync = vi.mocked(statSync)
 
-const STATS_FILE = '/Users/testuser/.claude/stats-cache.json'
-const PROJECTS_DIR = '/Users/testuser/.claude/projects'
+const STATS_FILE = '/home/testuser/.claude/stats-cache.json'
+const PROJECTS_DIR = '/home/testuser/.claude/projects'
 const PROJECT_DIR = `${PROJECTS_DIR}/project-a`
 const PROJECT_FILE = `${PROJECT_DIR}/session.jsonl`
 

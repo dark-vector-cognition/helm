@@ -32,7 +32,7 @@ describe('agent feed monitor', () => {
         total_ticks: 17,
         total_actions: 143,
         memory_count: 84,
-        current_action: 'Posting JSONL schema to kunalnano/hydra issue 11',
+        current_action: 'Posting JSONL schema to example-org/sample-repo issue 11',
         status: 'active',
         goals: [{ name: 'Social Presence', progress: 0.35, priority: 1 }]
       }),
@@ -49,7 +49,7 @@ describe('agent feed monitor', () => {
       totalActions: 143,
       memoryCount: 84,
       sessionId: 'sess_abc123',
-      currentAction: 'Posting JSONL schema to kunalnano/hydra issue 11'
+      currentAction: 'Posting JSONL schema to example-org/sample-repo issue 11'
     })
     expect(agent?.goals).toEqual([{ name: 'Social Presence', progress: 0.35, priority: 1 }])
     expect(agent?.uptime).toBe(6 * 60 * 1000)
@@ -86,7 +86,7 @@ describe('agent feed monitor', () => {
         tick: 17,
         event_type: 'external_action',
         tool: 'github_api',
-        target: 'kunalnano/hydra#11',
+        target: 'example-org/sample-repo#11',
         outcome: 'success',
         metadata: { action: 'post_comment' }
       }),
@@ -99,12 +99,12 @@ describe('agent feed monitor', () => {
       source: 'botbotfromuk-v1'
     })
     expect(event?.message).toContain('botbotfromuk-v1 [t17] post comment')
-    expect(event?.message).toContain('kunalnano/hydra#11')
+    expect(event?.message).toContain('example-org/sample-repo#11')
     expect(event?.ingestKey).toHaveLength(40)
   })
 
   it('loads state and trace files from configured feed directories', () => {
-    tempDir = mkdtempSync(join(tmpdir(), 'hydra-agent-feed-'))
+    tempDir = mkdtempSync(join(tmpdir(), 'helm-agent-feed-'))
     mkdirSync(tempDir, { recursive: true })
 
     writeFileSync(
@@ -128,7 +128,7 @@ describe('agent feed monitor', () => {
           tick: 17,
           event_type: 'external_action',
           tool: 'github_api',
-          target: 'kunalnano/hydra#11',
+          target: 'example-org/sample-repo#11',
           outcome: 'success',
           metadata: { action: 'post_comment' }
         }),
@@ -150,7 +150,7 @@ describe('agent feed monitor', () => {
       monitorInterval: 2000,
       snapshotInterval: 30000,
       vaultRagEndpoint: 'http://127.0.0.1:8742',
-      vaultPath: '/Users/test/Documents/ai/obsidian-vault',
+      vaultPath: '/home/test/Documents/ai/obsidian-vault',
       vaultRagLocation: 'local' as const,
       vaultRagRemoteHost: '',
       vaultRagAutoCheck: true,
@@ -166,13 +166,13 @@ describe('agent feed monitor', () => {
     expect(events[1].type).toBe('agent_update')
   })
 
-  it('checks the Helm agent feed path before legacy Hydra locations', () => {
-    const paths = getDefaultAgentFeedPaths('/Users/tester')
+  it('checks the Helm agent feed path before legacy locations', () => {
+    const paths = getDefaultAgentFeedPaths('/home/tester')
 
     expect(paths).toEqual([
-      '/Users/tester/.config/helm/agents',
-      '/Users/tester/.config/hydra/agents',
-      '/Users/tester/.hydra/agents'
+      '/home/tester/.config/helm/agents',
+      '/home/tester/.config/hydra/agents',
+      '/home/tester/.hydra/agents'
     ])
   })
 })

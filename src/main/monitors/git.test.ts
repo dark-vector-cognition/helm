@@ -64,8 +64,8 @@ describe('parseGitLog', () => {
 
   it('detects Co-Authored-By Claude', () => {
     const log =
-      'abc1234567890|Hank|dev@example.com|1700000000|feat: add dashboard|\nCo-Authored-By: Claude <noreply@anthropic.com>§§§'
-    const result = parseGitLog(log, 'hydra')
+      'abc1234567890|Test Author|test@example.com|1700000000|feat: add dashboard|\nCo-Authored-By: Claude <noreply@anthropic.com>§§§'
+    const result = parseGitLog(log, 'helm')
     expect(result).toHaveLength(1)
     expect(result[0].isAiAuthored).toBe(true)
     expect(result[0].aiAgent).toBe('claude')
@@ -74,7 +74,7 @@ describe('parseGitLog', () => {
   it('handles multiple commits, some AI some human', () => {
     const log = [
       'aaa1111111111|Human Dev|dev@example.com|1700000001|fix: typo|§§§',
-      'bbb2222222222|Hank|dev@example.com|1700000002|feat: new panel|\nCo-Authored-By: Claude Opus <noreply@anthropic.com>§§§',
+      'bbb2222222222|Test Author|test@example.com|1700000002|feat: new panel|\nCo-Authored-By: Claude Opus <noreply@anthropic.com>§§§',
       'ccc3333333333|Bot|bot@test.com|1700000003|chore: cleanup|§§§'
     ].join('\n')
     const result = parseGitLog(log, 'test-repo')
