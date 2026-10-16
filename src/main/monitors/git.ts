@@ -1,13 +1,9 @@
-import { exec } from 'child_process'
-import { promisify } from 'util'
 import { existsSync } from 'fs'
 import { join } from 'path'
 import { isWindows } from '../platform'
-import { POWERSHELL_FIND_GIT_SCRIPT, runFile, runPowerShell } from './shell-run'
+import { POWERSHELL_FIND_GIT_SCRIPT, runFile, runGit, runPowerShell } from './shell-run'
 import type { GitRepoInfo, GitCommit, GitActionResult } from '../../shared/types'
 import { getAppRoot, loadEnvironment, resolvePathSetting } from '../app-paths'
-
-const execAsync = promisify(exec)
 
 function getDefaultScanDirs(): string[] {
   const repoRoot = getAppRoot()
@@ -62,9 +58,9 @@ async function getRepoInfo(repoPath: string): Promise<GitRepoInfo | null> {
   try {
     const opts = { cwd: repoPath }
     const [branchResult, statusResult, aheadBehindResult] = await Promise.all([
-      execAsync('git rev-parse --abbrev-ref HEAD', opts),
-      execAsync('git status --porcelain', opts),
-      execAsync('git status --branch --porcelain', opts)
+      runGit(['rev-parse', '--abbrev-ref', 'HEAD'], opts),
+      runGit(['status', '--porcelain'], opts),
+      runGit(['status', '--branch', '--porcelain'], opts)
     ])
 
     const branch = branchResult.stdout.trim()
@@ -203,16 +199,37 @@ export function parseGitLog(logOutput: string, repoName: string): GitCommit[] {
   return commits
 }
 
+export const MIN_COMMIT_LIMIT = 1
+export const MAX_COMMIT_LIMIT = 100
+
+/**
+ * A commit limit is valid only when it is a whole number from 1 to 100. The value comes over IPC,
+ * so its type is not guaranteed: strings, floats, NaN, Infinity, and out-of-range numbers all fail.
+ */
+export function isValidCommitLimit(limit: unknown): limit is number {
+  return (
+    typeof limit === 'number' &&
+    Number.isInteger(limit) &&
+    limit >= MIN_COMMIT_LIMIT &&
+    limit <= MAX_COMMIT_LIMIT
+  )
+}
+
+/**
+ * Recent commits of one repo. An invalid limit returns no commits and runs nothing. git runs by its
+ * absolute path with an argument array and no shell, so neither the limit nor the repo is ever
+ * parsed as a command. No commits come back when git is not on PATH.
+ */
 export async function getRepoCommitHistory(
   repoPath: string,
   limit: number = 20
 ): Promise<GitCommit[]> {
+  if (!isValidCommitLimit(limit)) return []
   try {
     const repoName = repoPath.split(/[/\\]/).pop() || repoPath
-    // limit is always a number from the app, repoPath comes from internal repo scanning
-    const { stdout } = await execAsync(
-      `git log --pretty=format:'%H|%an|%ae|%at|%s|%b§§§' -n ${limit}`,
-      { cwd: repoPath, maxBuffer: 1024 * 1024 }
+    const { stdout } = await runGit(
+      ['log', '--pretty=format:%H|%an|%ae|%at|%s|%b§§§', '-n', String(limit)],
+      { cwd: repoPath }
     )
     return parseGitLog(stdout, repoName)
   } catch {
@@ -223,24 +240,31 @@ export async function getRepoCommitHistory(
 const SAFE_GIT_ACTIONS = ['pull', 'push', 'stash', 'stash pop', 'fetch'] as const
 
 /**
+ * The reason a git call failed, for the screen: what git printed on stderr (for example
+ * "No stash entries found."), else the exit message from the failed call.
+ */
+function describeGitFailure(err: unknown): string {
+  if (!(err instanceof Error)) return 'Git action failed'
+  const stderr = (err as Error & { stderr?: unknown }).stderr
+  const fromGit = typeof stderr === 'string' ? stderr.trim() : ''
+  return fromGit || err.message
+}
+
+/**
  * Execute a safe git action on a repo.
- * Only whitelisted commands are allowed - no arbitrary shell execution.
+ * Only whitelisted commands are allowed, and git runs by its absolute path with no shell.
  */
 export async function runGitAction(repoPath: string, action: string): Promise<GitActionResult> {
   if (!SAFE_GIT_ACTIONS.includes(action as (typeof SAFE_GIT_ACTIONS)[number])) {
     return { success: false, output: `Unknown action: ${action}` }
   }
   try {
-    const { stdout, stderr } = await execAsync(`git ${action}`, {
+    const { stdout, stderr } = await runGit(action.split(' '), {
       cwd: repoPath,
       timeout: 30000
     })
     return { success: true, output: stdout.trim() || stderr.trim() || 'Done' }
   } catch (err) {
-    const message =
-      err instanceof Error
-        ? (err as Error & { stderr?: string }).stderr?.trim() || err.message
-        : 'Git action failed'
-    return { success: false, output: message }
+    return { success: false, output: describeGitFailure(err) }
   }
 }

@@ -243,13 +243,23 @@ describe('generateBriefing API key header', () => {
     expect(sentHeaders()).not.toHaveProperty('Authorization')
   })
 
-  it('prefers LLM_API_KEY from the environment over the config key', async () => {
+  it('prefers LLM_API_KEY over the config key when LM_STUDIO_URL names the endpoint', async () => {
     loadConfigMock.mockReturnValue({ lmStudioUrl: 'https://api.example.com/v1', apiKey: 'cfg-key' })
     process.env.LLM_API_KEY = 'env-key'
+    process.env.LM_STUDIO_URL = 'https://api.example.com/v1'
 
     await generateBriefing(mockState)
 
     expect(sentHeaders().Authorization).toBe('Bearer env-key')
+  })
+
+  it('sends no key for an LLM_API_KEY that has no LM_STUDIO_URL next to it', async () => {
+    loadConfigMock.mockReturnValue({ lmStudioUrl: 'https://api.example.com/v1' })
+    process.env.LLM_API_KEY = 'env-key'
+
+    await generateBriefing(mockState)
+
+    expect(sentHeaders()).toEqual({ 'Content-Type': 'application/json' })
   })
 
   it('keeps the key out of the request body and the returned briefing', async () => {

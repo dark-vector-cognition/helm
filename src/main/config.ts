@@ -8,6 +8,7 @@ import {
   resolveCommandOrPathSetting,
   resolvePathSetting
 } from './app-paths'
+import { envKeyWithEndpoint, normalizeEndpointUrl } from './endpoint-url'
 
 const CONFIG_DIR = join(homedir(), '.config', 'helm')
 const LEGACY_CONFIG_DIR = join(homedir(), '.config', 'hydra')
@@ -166,24 +167,10 @@ function cleanApiKey(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
 }
 
-/**
- * Reduce an endpoint URL to what identifies the host: no trailing slash, no /v1, no query or
- * hash, and a lower-case scheme and host. Two spellings of the same endpoint compare equal.
- */
+/** Two spellings of the same endpoint compare equal (see normalizeEndpointUrl). */
 function normalizeEndpoint(raw: unknown): string {
   const trimmed = typeof raw === 'string' ? raw.trim() : ''
-  if (!trimmed) return ''
-  try {
-    const url = new URL(trimmed)
-    url.hash = ''
-    url.search = ''
-    let pathname = url.pathname.replace(/\/+$/, '')
-    if (pathname.endsWith('/v1')) pathname = pathname.slice(0, -3)
-    url.pathname = pathname || ''
-    return url.toString().replace(/\/$/, '')
-  } catch {
-    return trimmed.toLowerCase()
-  }
+  return normalizeEndpointUrl(trimmed) ?? trimmed.toLowerCase()
 }
 
 function writeConfigFile(config: Partial<HelmConfig>): void {
@@ -193,12 +180,14 @@ function writeConfigFile(config: Partial<HelmConfig>): void {
 
 /**
  * The config as the renderer may see it. The raw API key never leaves the main process:
- * `apiKey` is always an empty string, and `hasApiKey` says whether a key is in effect
- * (stored in the config file or set as LLM_API_KEY).
+ * `apiKey` is always an empty string, and `hasApiKey` says whether a key is in effect: one stored
+ * in the config file, or LLM_API_KEY paired with an LM_STUDIO_URL that parses as a URL. That is the
+ * rule the model client uses (envKeyWithEndpoint), so an LLM_API_KEY that the client would ignore,
+ * with no LM_STUDIO_URL or one that is not a URL, does not count.
  */
 export function getRedactedConfig(): HelmConfig {
   const config = loadConfig()
-  const hasApiKey = Boolean(cleanApiKey(config.apiKey) || process.env.LLM_API_KEY?.trim())
+  const hasApiKey = Boolean(cleanApiKey(config.apiKey) || envKeyWithEndpoint())
   return { ...config, apiKey: '', hasApiKey }
 }
 

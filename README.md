@@ -47,12 +47,6 @@ Every panel appears on exactly one page. No duplicated widgets, no redundant noi
 
 Operator walkthrough: [docs/OPERATOR-WALKTHROUGH.md](docs/OPERATOR-WALKTHROUGH.md)
 
-### Traffic Grid
-
-The capture below is from the 4.0 shell and was taken with `Secure View` enabled, so local hosts, paths, and endpoint details stay redacted.
-
-![HELM Traffic Grid](docs/screenshots/helm-4-grid-topology.png)
-
 ## Core Capabilities
 
 - **Bridge** surfaces health, hotspots, command center, and the compact AI briefing
@@ -77,6 +71,7 @@ To turn on AI briefings, point HELM at any OpenAI-compatible server. No cloud in
 - With nothing configured, HELM does not scan your network. `Request Briefing` only looks for a server on this machine at `http://localhost:1234` and otherwise shows a calm "No model configured" state
 - Once an endpoint is configured, `Invoke Repair` probes it plus local and LAN-discovered fallbacks, and saves a repaired URL when it finds a healthy server. When an API key is set, it checks only the configured endpoint
 - An API key belongs to the endpoint it was saved for: if a save changes `lmStudioUrl` without sending a new key, HELM deletes the stored key so it cannot be sent to a different host
+- `LLM_API_KEY` applies only together with `LM_STUDIO_URL`, and it is sent only to that endpoint. Without `LM_STUDIO_URL`, or with one that is not a valid URL, it is ignored
 
 For cross-machine setups, enable network serving on the model host and make sure the chosen port is reachable through the host firewall.
 
@@ -93,7 +88,7 @@ Config file: `~/.config/helm/config.json`
 | Option            | Default                 | Description                                         |
 | ----------------- | ----------------------- | --------------------------------------------------- |
 | `lmStudioUrl`     | unset (no model)        | OpenAI-compatible server URL for AI briefings       |
-| `apiKey`          | unset                   | Optional API key for hosted endpoints, sent as `Authorization: Bearer <key>` to the configured URL only. The `LLM_API_KEY` environment variable overrides it. The key stays in the main process and is never sent to the UI |
+| `apiKey`          | unset                   | Optional API key for hosted endpoints, sent as `Authorization: Bearer <key>` to the configured URL only. `LLM_API_KEY` overrides it when `LM_STUDIO_URL` is also set. The key stays in the main process and is never sent to the UI |
 | `gitRepoPaths`    | `[]`                    | Paths to monitor for git status                     |
 | `monitorInterval` | `2000`                  | Monitor polling interval in milliseconds            |
 
