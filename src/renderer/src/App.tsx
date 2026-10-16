@@ -8,7 +8,6 @@ import { LogsPanel } from './panels/Logs'
 import { BriefingPanel } from './panels/Briefing'
 import { NotificationsPanel } from './panels/Notifications'
 import { NetworkPanel } from './panels/Network'
-import { SecurityPanel } from './panels/Security'
 import { ScorecardsStrip } from './panels/ScorecardsStrip'
 import { GitHistoryPanel } from './panels/GitHistory'
 import { CommandCenterPanel } from './panels/CommandCenter'
@@ -55,14 +54,14 @@ const PAGES: PageMeta[] = [
   {
     id: 'grid',
     label: 'Grid',
-    kicker: 'Network and security',
-    description: 'Owns traffic, exposed listeners, and security posture.'
+    kicker: 'Network and ports',
+    description: 'Owns traffic and exposed listeners.'
   },
   {
     id: 'ai',
     label: 'AI',
     kicker: 'Local AI control',
-    description: 'Owns LM Studio control, AI briefings, and usage tracking.'
+    description: 'Owns the optional model connection, AI briefings, and usage tracking.'
   },
   {
     id: 'vault',
@@ -98,7 +97,6 @@ const PANEL_DOTS: Record<string, string> = {
   'Operator Briefing': 'bg-cyan-400',
   'AI Control': 'bg-cyan-400',
   'Network Traffic': 'bg-green-400',
-  'Security Posture': 'bg-red-400',
   'Listening Ports': 'bg-teal-400',
   Notifications: 'bg-orange-400',
   'FM Radio': 'bg-pink-300',
@@ -120,7 +118,6 @@ const PANEL_ACCENT_HEX: Record<string, string> = {
   'Operator Briefing': '#22d3ee',
   'AI Control': '#22d3ee',
   'Network Traffic': '#4ade80',
-  'Security Posture': '#f87171',
   'Listening Ports': '#2dd4bf',
   Notifications: '#fb923c',
   'FM Radio': '#f9a8d4',
@@ -223,7 +220,7 @@ function getShellHealth(state: SystemState | null): {
     return {
       dot: 'bg-amber-400',
       glow: 'shadow-amber-400/50',
-      label: 'Watch posture'
+      label: 'Watch load'
     }
   }
 
@@ -374,7 +371,7 @@ function Header({
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-base font-semibold text-white tracking-[0.16em] font-[family-name:var(--helm-font-mono)]">HELM</h1>
-            <span className="text-[10px] shell-subtle font-[family-name:var(--helm-font-mono)]">V4</span>
+            <span className="text-[10px] shell-subtle font-[family-name:var(--helm-font-mono)]">V5</span>
           </div>
           <div className="text-[11px] shell-subtle">{health.label}</div>
         </div>
@@ -493,14 +490,9 @@ function SwarmPage(): JSX.Element {
 function GridPage(): JSX.Element {
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 xl:grid-cols-2">
-        <DashPanel title="Network Traffic" className="min-h-[360px]">
-          <NetworkPanel />
-        </DashPanel>
-        <DashPanel title="Security Posture" className="min-h-[360px]">
-          <SecurityPanel />
-        </DashPanel>
-      </div>
+      <DashPanel title="Network Traffic" className="min-h-[360px]">
+        <NetworkPanel />
+      </DashPanel>
       <DashPanel title="Listening Ports" className="min-h-[280px]">
         <PortsPanel />
       </DashPanel>

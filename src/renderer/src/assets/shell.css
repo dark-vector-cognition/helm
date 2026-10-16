@@ -1,5 +1,5 @@
 /* ─────────────────────────────────────────────
-   Shell structural classes — Winamp chrome system
+   Shell structural classes - Winamp chrome system
    Hard bevels, brushed metal, recessed displays
    ───────────────────────────────────────────── */
 
@@ -354,7 +354,7 @@ body {
   border-color: var(--helm-accent);
 }
 
-/* ── Command palette (overlay — CAN use blur) ── */
+/* ── Command palette (overlay - CAN use blur) ── */
 .shell-command-overlay {
   background: rgba(8, 12, 20, 0.82);
   backdrop-filter: blur(8px);

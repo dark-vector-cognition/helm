@@ -1,6 +1,6 @@
 import { Notification } from 'electron'
 
-const THROTTLE_MS = 30_000 // Max 1 desktop notification per 30s
+const THROTTLE_MS = 120_000 // Max 1 desktop notification per 2min
 let lastNotificationTime = 0
 
 export function showDesktopNotification(title: string, body: string): void {
@@ -10,5 +10,5 @@ export function showDesktopNotification(title: string, body: string): void {
   if (now - lastNotificationTime < THROTTLE_MS) return
 
   lastNotificationTime = now
-  new Notification({ title, body }).show()
+  new Notification({ title, body, silent: true }).show()
 }

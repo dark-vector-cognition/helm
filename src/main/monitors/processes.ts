@@ -1,6 +1,7 @@
 import { exec } from 'child_process'
 import { promisify } from 'util'
 import type { ProcessInfo, ProcessGroup } from '../../shared/types'
+import { isWindows } from '../platform'
 
 const execAsync = promisify(exec)
 
@@ -30,15 +31,30 @@ export function parseProcessOutput(output: string): ProcessInfo[] {
 
 function extractProcessName(command: string): string {
   const executable = command.split(/\s+/)[0]
-  return executable.split('/').pop() || executable
+  return executable.split(/[/\\]/).pop() || executable
 }
 
 function extractWorkingDir(command: string): string | undefined {
-  const pathMatch = command.match(/\/(Users|home)\/[^\s]+/)
-  if (!pathMatch) return undefined
+  // Try Unix-style path first
+  const unixMatch = command.match(/\/(Users|home)\/[^\s]+/)
+  // Try Windows-style path (a drive letter, then Users or home, with either slash style)
+  const winMatch = command.match(/[A-Za-z]:[/\\](?:Users|home)[/\\][^\s]+/)
 
-  const fullPath = pathMatch[0]
-  const segments = fullPath.split('/')
+  if (!unixMatch && !winMatch) return undefined
+
+  if (unixMatch && !winMatch) {
+    // Pure Unix path
+    return extractWorkingDirFromSegments(unixMatch[0], '/')
+  }
+
+  // Windows path - normalize backslashes to forward slashes for consistent processing
+  const rawPath = (winMatch || unixMatch)![0]
+  const normalized = rawPath.replace(/\\/g, '/')
+  return extractWorkingDirFromSegments(normalized, '/')
+}
+
+function extractWorkingDirFromSegments(fullPath: string, sep: string): string | undefined {
+  const segments = fullPath.split(sep)
 
   // Infrastructure directories that indicate we've gone past the project root
   const INFRA_DIRS = ['node_modules', '.bin', 'bin', 'lib', '.nvm', 'versions']
@@ -49,24 +65,24 @@ function extractWorkingDir(command: string): string | undefined {
     if (INFRA_DIRS.includes(segments[i])) {
       // Return everything up to (but not including) this infrastructure dir
       if (i >= 3) {
-        return segments.slice(0, i).join('/')
+        return segments.slice(0, i).join(sep)
       }
       return undefined
     }
     // Skip version-like segments that are children of .nvm/versions etc.
     if (i > 3 && /^v?\d+[\.\d]*$/.test(segments[i])) {
       if (i >= 3) {
-        return segments.slice(0, i).join('/')
+        return segments.slice(0, i).join(sep)
       }
       return undefined
     }
   }
 
-  // No infrastructure dirs found — the path itself might be a file path.
+  // No infrastructure dirs found - the path itself might be a file path.
   // Return the directory (everything except the last segment if it looks like a file).
   const lastSegment = segments[segments.length - 1]
   if (lastSegment.includes('.') && segments.length > 3) {
-    return segments.slice(0, segments.length - 1).join('/')
+    return segments.slice(0, segments.length - 1).join(sep)
   }
 
   // Return the full path if it's a directory path
@@ -122,15 +138,86 @@ function classifyProcess(proc: ProcessInfo): { groupName: string; type: ProcessG
 
   // Group by project directory if detected
   if (proc.cwd) {
-    const projectName = proc.cwd.split('/').pop() || 'Unknown'
+    const projectName = proc.cwd.split(/[/\\]/).pop() || 'Unknown'
     return { groupName: projectName, type: 'project' }
   }
 
   return { groupName: 'System', type: 'other' }
 }
 
+const WINDOWS_PS_COMMAND =
+  'powershell.exe -NoProfile -Command "Get-Process | Select-Object Id, ProcessName, CPU, @{N=\'Mem\';E={[math]::Round($_.WorkingSet64/1MB,1)}}, Path, @{N=\'User\';E={try{$p=$_.GetOwner();if($p){$p.User}}catch{\'\'}}} | ConvertTo-Csv -NoTypeInformation"'
+
+export function parseWindowsProcessOutput(output: string): ProcessInfo[] {
+  const lines = output.trim().split('\n')
+  if (lines.length < 2) return []
+
+  return lines
+    .slice(1) // skip CSV header
+    .map((line) => {
+      const trimmed = line.trim()
+      if (!trimmed) return null
+
+      // Parse CSV: "Id","ProcessName","CPU","Mem","Path","User"
+      // Fields may be quoted and may contain commas inside quotes
+      const fields = parseCSVLine(trimmed)
+      if (fields.length < 4) return null
+
+      const pid = parseInt(fields[0], 10)
+      const processName = fields[1] || ''
+      const cpu = parseFloat(fields[2]) || 0
+      const mem = parseFloat(fields[3]) || 0
+      const path = fields[4] || ''
+      const user = fields[5] || ''
+
+      const command = path || processName
+      const name = extractProcessName(command || processName)
+      const cwd = path ? extractWorkingDir(path) : undefined
+
+      return { pid, user, cpu, mem, command, name, cwd } as ProcessInfo
+    })
+    .filter((p): p is ProcessInfo => p !== null && !isNaN(p.pid))
+}
+
+function parseCSVLine(line: string): string[] {
+  const fields: string[] = []
+  let current = ''
+  let inQuotes = false
+
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i]
+    if (inQuotes) {
+      if (ch === '"') {
+        if (i + 1 < line.length && line[i + 1] === '"') {
+          current += '"'
+          i++ // skip escaped quote
+        } else {
+          inQuotes = false
+        }
+      } else {
+        current += ch
+      }
+    } else {
+      if (ch === '"') {
+        inQuotes = true
+      } else if (ch === ',') {
+        fields.push(current)
+        current = ''
+      } else {
+        current += ch
+      }
+    }
+  }
+  fields.push(current)
+  return fields
+}
+
 export async function getProcesses(): Promise<ProcessInfo[]> {
   try {
+    if (isWindows()) {
+      const { stdout } = await execAsync(WINDOWS_PS_COMMAND, { maxBuffer: 10 * 1024 * 1024 })
+      return parseWindowsProcessOutput(stdout)
+    }
     const { stdout } = await execAsync('ps aux')
     return parseProcessOutput(stdout)
   } catch {

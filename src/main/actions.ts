@@ -6,10 +6,11 @@ import type {
   GroupActionResult,
   ProcessInfo
 } from '../shared/types'
+import { isWindows } from './platform'
 
 const execFileAsync = promisify(execFile)
 
-export const PROTECTED_PROCESSES = [
+const UNIX_PROTECTED_PROCESSES = [
   'Finder',
   'WindowServer',
   'loginwindow',
@@ -17,9 +18,26 @@ export const PROTECTED_PROCESSES = [
   'launchd',
   'systemd',
   'Electron',
-  'HELM',
-  'hydra'
+  'HELM'
 ]
+
+const WINDOWS_PROTECTED_PROCESSES = [
+  'System',
+  'smss.exe',
+  'csrss.exe',
+  'wininit.exe',
+  'services.exe',
+  'lsass.exe',
+  'svchost.exe',
+  'explorer.exe',
+  'dwm.exe',
+  'Electron',
+  'HELM'
+]
+
+export const PROTECTED_PROCESSES = isWindows()
+  ? WINDOWS_PROTECTED_PROCESSES
+  : UNIX_PROTECTED_PROCESSES
 
 export function isProtectedProcess(name: string): boolean {
   return PROTECTED_PROCESSES.some((p) => p.toLowerCase() === name.toLowerCase())
@@ -31,6 +49,16 @@ export function validatePid(pid: number): boolean {
 
 async function verifyPidAlive(pid: number): Promise<string | null> {
   try {
+    if (isWindows()) {
+      const { stdout } = await execFileAsync(
+        'powershell.exe',
+        ['-NoProfile', '-Command', `(Get-Process -Id ${pid} -ErrorAction SilentlyContinue).ProcessName`],
+        { timeout: 5000 }
+      )
+      const name = stdout.trim()
+      return name || null
+    }
+
     const { stdout } = await execFileAsync('ps', ['-p', String(pid), '-o', 'comm='], {
       timeout: 3000
     })
@@ -74,6 +102,10 @@ export async function sendProcessSignal(
   }
 
   try {
+    if (isWindows() && signal === 'SIGKILL') {
+      await execFileAsync('taskkill', ['/F', '/PID', String(pid)], { timeout: 5000 })
+      return { success: true, pid, signal }
+    }
     process.kill(pid, signal)
     return { success: true, pid, signal }
   } catch (err) {

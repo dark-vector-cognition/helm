@@ -8,9 +8,9 @@ const mockProcesses: ProcessInfo[] = [
     user: 'testuser',
     cpu: 12.1,
     mem: 3.4,
-    command: '/Users/testuser/.nvm/versions/node/v22.0.0/bin/node /usr/local/bin/claude',
+    command: '/home/testuser/.nvm/versions/node/v22.0.0/bin/node /usr/local/bin/claude',
     name: 'node',
-    cwd: '/Users/testuser/Documents/ai/myAIProjects/Alfred'
+    cwd: '/home/testuser/projects/sample-app'
   },
   {
     pid: 5678,
@@ -19,16 +19,16 @@ const mockProcesses: ProcessInfo[] = [
     mem: 0.8,
     command: '/usr/local/bin/codex --task refactor',
     name: 'codex',
-    cwd: '/Users/testuser/Documents/ai/myAIProjects/health-scoring'
+    cwd: '/home/testuser/projects/health-scoring'
   },
   {
     pid: 1234,
     user: 'testuser',
     cpu: 5.2,
     mem: 1.3,
-    command: 'node /Users/testuser/Documents/ai/myAIProjects/Alfred/node_modules/.bin/vite',
+    command: 'node /home/testuser/projects/sample-app/node_modules/.bin/vite',
     name: 'node',
-    cwd: '/Users/testuser/Documents/ai/myAIProjects/Alfred'
+    cwd: '/home/testuser/projects/sample-app'
   }
 ]
 
@@ -48,7 +48,7 @@ describe('detectAgents', () => {
     expect(codex!.pid).toBe(5678)
   })
 
-  it('identifies Codex desktop app-server processes', () => {
+  it('does not detect Codex desktop app-server processes', () => {
     const procs: ProcessInfo[] = [
       {
         pid: 88081,
@@ -60,9 +60,7 @@ describe('detectAgents', () => {
       }
     ]
     const agents = detectAgents(procs)
-    expect(agents).toHaveLength(1)
-    expect(agents[0].type).toBe('codex')
-    expect(agents[0].name).toBe('Codex')
+    expect(agents).toHaveLength(0)
   })
 
   it('does not flag non-agent processes', () => {
@@ -73,7 +71,7 @@ describe('detectAgents', () => {
   it('detects working directory for agents', () => {
     const agents = detectAgents(mockProcesses)
     const claude = agents.find((a) => a.type === 'claude-code')
-    expect(claude!.workingDir).toBe('/Users/testuser/Documents/ai/myAIProjects/Alfred')
+    expect(claude!.workingDir).toBe('/home/testuser/projects/sample-app')
   })
 
   it('identifies Cursor processes', () => {
@@ -127,7 +125,35 @@ describe('detectAgents', () => {
     expect(agents[0].name).toBe('Continue')
   })
 
-  it('identifies Gemini Chrome app', () => {
+  it('identifies Gemini CLI processes without duplicating the node wrapper', () => {
+    const procs: ProcessInfo[] = [
+      {
+        pid: 9005,
+        user: 'test',
+        cpu: 4,
+        mem: 1,
+        command: 'node /opt/homebrew/bin/gemini --skip-trust',
+        name: 'node',
+        cwd: '/home/test/projects/helm'
+      },
+      {
+        pid: 9006,
+        user: 'test',
+        cpu: 0,
+        mem: 1,
+        command:
+          '/opt/homebrew/Cellar/node/26.0.0/bin/node --max-old-space-size=9216 /opt/homebrew/bin/gemini --skip-trust',
+        name: 'node',
+        cwd: '/home/test/projects/helm'
+      }
+    ]
+    const agents = detectAgents(procs)
+    expect(agents).toHaveLength(1)
+    expect(agents[0].type).toBe('gemini')
+    expect(agents[0].name).toBe('Gemini')
+  })
+
+  it('does not detect Gemini Desktop as a standing agent', () => {
     const procs: ProcessInfo[] = [
       {
         pid: 9005,
@@ -135,14 +161,12 @@ describe('detectAgents', () => {
         cpu: 4,
         mem: 1,
         command:
-          '/Users/test/Applications/Chrome Apps.localized/Gemini.app/Contents/MacOS/app_mode_loader',
+          '/home/test/Applications/Chrome Apps.localized/Gemini.app/Contents/MacOS/app_mode_loader',
         name: 'app_mode_loader'
       }
     ]
     const agents = detectAgents(procs)
-    expect(agents).toHaveLength(1)
-    expect(agents[0].type).toBe('gemini')
-    expect(agents[0].name).toBe('Gemini')
+    expect(agents).toHaveLength(0)
   })
 
   it('does not detect Claude Desktop as Claude Code', () => {
@@ -154,6 +178,22 @@ describe('detectAgents', () => {
         mem: 0.6,
         command: '/Applications/Claude.app/Contents/MacOS/Claude',
         name: 'Claude'
+      }
+    ]
+    const agents = detectAgents(procs)
+    expect(agents).toHaveLength(0)
+  })
+
+  it('does not detect Claude-adjacent Stream Deck plugins as Claude Code', () => {
+    const procs: ProcessInfo[] = [
+      {
+        pid: 51005,
+        user: 'test',
+        cpu: 12,
+        mem: 0.8,
+        command:
+          '/home/test/projects/claude-pet/com.example.claude-pet.sdPlugin/bin/plugin.js',
+        name: 'node'
       }
     ]
     const agents = detectAgents(procs)
@@ -175,7 +215,39 @@ describe('detectAgents', () => {
     expect(agents).toHaveLength(0)
   })
 
-  it('ignores Codex helper processes and keeps the real desktop agent', () => {
+  it('does not detect Codex Computer Use services as Codex agents', () => {
+    const procs: ProcessInfo[] = [
+      {
+        pid: 14052,
+        user: 'test',
+        cpu: 29,
+        mem: 0.5,
+        command:
+          '/home/test/.codex/computer-use/Codex Computer Use.app/Contents/MacOS/SkyComputerUseService',
+        name: 'SkyComputerUseService'
+      }
+    ]
+    const agents = detectAgents(procs)
+    expect(agents).toHaveLength(0)
+  })
+
+  it('does not detect one-shot Codex exec jobs as standing Codex agents', () => {
+    const procs: ProcessInfo[] = [
+      {
+        pid: 31977,
+        user: 'test',
+        cpu: 2.3,
+        mem: 0.4,
+        command:
+          'codex exec --json --skip-git-repo-check --ephemeral --sandbox read-only --model gpt-5.5',
+        name: 'codex'
+      }
+    ]
+    const agents = detectAgents(procs)
+    expect(agents).toHaveLength(0)
+  })
+
+  it('ignores Codex desktop processes and keeps the real CLI agent', () => {
     const procs: ProcessInfo[] = [
       {
         pid: 87935,
@@ -219,12 +291,22 @@ describe('detectAgents', () => {
         command:
           '/Applications/Codex.app/Contents/Frameworks/Codex Helper.app/Contents/MacOS/Codex Helper --type=utility --utility-sub-type=network.mojom.NetworkService',
         name: 'Codex'
+      },
+      {
+        pid: 99001,
+        user: 'test',
+        cpu: 0.4,
+        mem: 0.8,
+        command:
+          '/opt/homebrew/lib/node_modules/@openai/codex/node_modules/@openai/codex-darwin-arm64/vendor/aarch64-apple-darwin/codex/codex',
+        name: 'codex',
+        cwd: '/home/test/projects/helm'
       }
     ]
     const agents = detectAgents(procs)
     expect(agents).toHaveLength(1)
     expect(agents[0].type).toBe('codex')
-    expect(agents[0].pid).toBe(88081)
+    expect(agents[0].pid).toBe(99001)
     expect(agents[0].name).toBe('Codex')
   })
 

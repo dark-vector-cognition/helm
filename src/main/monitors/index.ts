@@ -19,13 +19,11 @@ import { evaluateRules } from '../intelligence/auto-heal'
 import type { PreviousState } from '../intelligence/auto-heal'
 import { generateBriefing } from '../intelligence/briefing'
 import { healLmStudioConnection } from '../intelligence/lmstudio'
-import { invokeYennefer } from '../intelligence/yennefer'
 import { DEFAULT_RULES } from '../intelligence/rules'
 import { getNetworkActivity } from './network'
 import { getFirewallRules } from './firewall'
 import { getDiskUsage } from './disk'
 import { getBatteryStatus } from './battery'
-import { runSecurityScan, extractPosture } from '../intelligence/security'
 import { getCCUsage } from './ccusage'
 import { buildMonitorTickThresholds, resolveMonitorInterval } from './schedule'
 import { showDesktopNotification } from '../notifications'
@@ -63,7 +61,7 @@ import { IPC_CHANNELS } from '../../shared/types'
 /**
  * Get real available memory on macOS using vm_stat.
  * os.freemem() only reports truly free pages, ignoring purgeable/cached memory
- * that macOS would release under pressure — leading to misleading 99% usage.
+ * that macOS would release under pressure - leading to misleading 99% usage.
  */
 async function getAvailableMemory(): Promise<number> {
   const totalMemory = totalmem()
@@ -281,7 +279,7 @@ export function startMonitoring(mainWindow: BrowserWindow, intervalMs?: number):
           try {
             insertAlert(event)
           } catch {
-            /* DB write failed — continue */
+            /* DB write failed - continue */
           }
           const notif: HelmNotification = {
             id: `${event.timestamp}-${event.rule}`,
@@ -295,7 +293,7 @@ export function startMonitoring(mainWindow: BrowserWindow, intervalMs?: number):
           try {
             dbInsertNotification(notif)
           } catch {
-            /* DB write failed — continue */
+            /* DB write failed - continue */
           }
           if (!mainWindow.isDestroyed()) {
             mainWindow.webContents.send(IPC_CHANNELS.NOTIFICATION, notif)
@@ -488,7 +486,7 @@ export function startMonitoring(mainWindow: BrowserWindow, intervalMs?: number):
         insertLogLines(lines)
         pruneOldLogLines(10000)
       } catch {
-        /* DB write failed — continue */
+        /* DB write failed - continue */
       }
     }
     if (!mainWindow.isDestroyed() && (kind === 'tail' || !hasPersistedLogs)) {
@@ -504,24 +502,13 @@ export function startMonitoring(mainWindow: BrowserWindow, intervalMs?: number):
     try {
       insertBriefing(result)
     } catch {
-      /* DB write failed — continue */
+      /* DB write failed - continue */
     }
     return result
   })
 
   ipcMain.handle(IPC_CHANNELS.LM_STUDIO_HEAL, async () => {
     return healLmStudioConnection({ persist: true })
-  })
-
-  ipcMain.handle(IPC_CHANNELS.YENNEFER_REQUEST, async () => {
-    if (!latestState) return null
-    const result = await invokeYennefer(latestState)
-    try {
-      insertBriefing(result)
-    } catch {
-      /* DB write failed — continue */
-    }
-    return result
   })
 
   ipcMain.handle(IPC_CHANNELS.GET_HEAL_HISTORY, () => getAlertHistory(100))
@@ -532,7 +519,7 @@ export function startMonitoring(mainWindow: BrowserWindow, intervalMs?: number):
     try {
       dbDismissNotification(id)
     } catch {
-      /* DB write failed — continue */
+      /* DB write failed - continue */
     }
   })
 
@@ -545,22 +532,6 @@ export function startMonitoring(mainWindow: BrowserWindow, intervalMs?: number):
 
   ipcMain.handle(IPC_CHANNELS.GIT_ACTION, async (_event, repoPath: string, action: string) => {
     return runGitAction(repoPath, action)
-  })
-
-  ipcMain.handle(IPC_CHANNELS.SECURITY_SCAN_REQUEST, async (_event, command: string) => {
-    const result = await runSecurityScan(command)
-    if (!mainWindow.isDestroyed()) {
-      mainWindow.webContents.send(IPC_CHANNELS.SECURITY_SCAN_RESULT, result)
-
-      // After a successful survey scan, send posture update to renderer
-      if (command === 'survey' && result.status === 'complete') {
-        const posture = extractPosture()
-        if (posture) {
-          mainWindow.webContents.send(IPC_CHANNELS.SECURITY_POSTURE, posture)
-        }
-      }
-    }
-    return result
   })
 
   ipcMain.handle(IPC_CHANNELS.PROCESS_KILL, async (_event, pid: number, expectedName?: string) => {
@@ -627,12 +598,10 @@ export function stopMonitoring(): void {
   ipcMain.removeAllListeners(IPC_CHANNELS.REQUEST_REFRESH)
   ipcMain.removeHandler(IPC_CHANNELS.BRIEFING_REQUEST)
   ipcMain.removeHandler(IPC_CHANNELS.LM_STUDIO_HEAL)
-  ipcMain.removeHandler(IPC_CHANNELS.YENNEFER_REQUEST)
   ipcMain.removeHandler(IPC_CHANNELS.GET_HEAL_HISTORY)
   ipcMain.removeAllListeners(IPC_CHANNELS.DISMISS_NOTIFICATION)
   ipcMain.removeHandler(IPC_CHANNELS.GET_FIREWALL_RULES)
   ipcMain.removeHandler(IPC_CHANNELS.GIT_ACTION)
-  ipcMain.removeHandler(IPC_CHANNELS.SECURITY_SCAN_REQUEST)
   ipcMain.removeHandler(IPC_CHANNELS.PROCESS_KILL)
   ipcMain.removeHandler(IPC_CHANNELS.PROCESS_SIGNAL)
   ipcMain.removeHandler(IPC_CHANNELS.PROCESS_KILL_GROUP)

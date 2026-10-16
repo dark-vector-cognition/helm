@@ -71,7 +71,7 @@ export interface AgentInfo {
 
 // ── HIVE Types ──────────────────────────────────────────────
 
-export type HiveRoleName = 'architect' | 'builder' | 'analyst' | 'ops' | 'strategist' | string
+export type HiveRoleName = 'architect' | 'builder' | 'analyst' | 'ops' | string
 export type HiveModel = 'opus' | 'sonnet' | 'haiku'
 
 export interface HiveRoleTemplate {
@@ -181,26 +181,6 @@ export interface FirewallState {
   totalAllowed: number
   totalBlocked: number
   lastUpdated: number
-}
-
-export interface SecurityScanResult {
-  id: string
-  command: string
-  output: string
-  timestamp: number
-  status: 'running' | 'complete' | 'error'
-}
-
-export interface SecurityPosture {
-  overallScore: number
-  grade: string
-  verdict: string
-  categories: {
-    name: string
-    score: number
-    weight: number
-    summary: string
-  }[]
 }
 
 export interface DiskMount {
@@ -329,6 +309,8 @@ export interface LmStudioProbeAttempt {
 export interface LmStudioHealResult {
   success: boolean
   repaired: boolean
+  /** False when no model endpoint is configured. The model is optional. */
+  configured: boolean
   message: string
   url?: string
   model?: string
@@ -405,9 +387,6 @@ export const IPC_CHANNELS = {
   NETWORK_STATE: 'network:state',
   FIREWALL_STATE: 'firewall:state',
   GET_FIREWALL_RULES: 'firewall:get-rules',
-  SECURITY_SCAN_REQUEST: 'security:scan-request',
-  SECURITY_SCAN_RESULT: 'security:scan-result',
-  SECURITY_POSTURE: 'security:posture',
   DB_QUERY_SNAPSHOTS: 'db:query-snapshots',
   DB_QUERY_ALERTS: 'db:query-alerts',
   DB_QUERY_BRIEFINGS: 'db:query-briefings',
@@ -416,8 +395,8 @@ export const IPC_CHANNELS = {
   DB_CLEAR_LOGS: 'db:clear-logs',
   CONFIG_GET: 'config:get',
   CONFIG_SAVE: 'config:save',
+  CONFIG_CLEAR_API_KEY: 'config:clear-api-key',
   GIT_COMMIT_HISTORY: 'git:commit-history',
-  DB_QUERY_POSTURE_HISTORY: 'db:query-posture-history',
   GIT_ACTION: 'git:action',
   PROCESS_KILL: 'process:kill',
   PROCESS_SIGNAL: 'process:signal',
@@ -426,7 +405,6 @@ export const IPC_CHANNELS = {
   SESSION_DELTA: 'session:delta',
   CCUSAGE_STATE: 'ccusage:state',
   CCUSAGE_REFRESH: 'ccusage:refresh',
-  YENNEFER_REQUEST: 'intelligence:yennefer-request',
   SKILLS_FEED: 'skills:feed',
   REGISTRY_GET_ALL: 'registry:get-all',
   REGISTRY_GET_BY_ID: 'registry:get-by-id',
@@ -487,13 +465,6 @@ export interface GitCommit {
   repoName: string
 }
 
-export interface PostureHistoryEntry {
-  timestamp: number
-  score: number
-  grade: string
-  verdict: string
-}
-
 export interface SkillUpdate {
   name: string
   title: string
@@ -539,8 +510,6 @@ export interface AgentRegistryEntry {
   parentAgent?: string
   tags: string[]
 }
-
-export type YenneferStyle = 'adaptive' | 'throughput' | 'creative' | 'strict'
 
 export interface RadioHomeLocation {
   label: string
@@ -606,18 +575,21 @@ export interface VaultReindexResult {
 }
 
 export interface HelmConfig {
+  /**
+   * Optional API key for hosted OpenAI-compatible endpoints. LLM_API_KEY in the environment
+   * overrides it. The raw key never crosses IPC: the renderer always receives an empty string
+   * here, and a save with an empty value keeps the stored key.
+   */
   apiKey?: string
+  /** Set by the main process on config sent to the renderer: true when a key is in effect. Never saved. */
+  hasApiKey?: boolean
   gitRepoPaths: string[]
   monitorInterval: number
   snapshotInterval: number
-  staffBinPath?: string
   lmStudioUrl?: string
-  networkTarget?: string
   agentPatterns?: { type: string; displayName: string; patterns: string[] }[]
   agentFeedPaths?: string[]
   logFilePaths?: string[]
-  yenneferEnabled?: boolean
-  yenneferStyle?: YenneferStyle
   radioHomeLocation?: RadioHomeLocation
   vaultRagEndpoint: string
   vaultPath: string

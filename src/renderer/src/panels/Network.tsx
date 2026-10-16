@@ -384,7 +384,7 @@ export function NetworkPanel(): JSX.Element {
         <>
           {isInterfaceMode && (
             <div className="text-[10px] text-gray-500 px-1 uppercase tracking-[0.18em]">
-              Interface mode — peer topology unavailable, showing transport surfaces instead
+              Interface mode - peer topology unavailable, showing transport surfaces instead
             </div>
           )}
 

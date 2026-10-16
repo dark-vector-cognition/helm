@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { RadioHomeLocation } from '../../../shared/types'
+import { RADIO_HOME_CHANGED_EVENT } from '../stores/radio-home'
 import {
   CUSTOM_RADIO_STREAM_ID,
   DEFAULT_RADIO_STATION_ID,
@@ -527,6 +528,7 @@ export function FMRadioPanel(): JSX.Element {
       })
       setHomeLocation(nextHomeLocation)
       setHomeDialogOpen(false)
+      window.dispatchEvent(new Event(RADIO_HOME_CHANGED_EVENT))
     } catch {
       setHomeLocationError('Could not save the home endpoint.')
     } finally {
@@ -538,7 +540,7 @@ export function FMRadioPanel(): JSX.Element {
     <div className="winamp-radio">
       <section className="winamp-window winamp-main-window">
         <div className="winamp-titlebar">
-          <span className="winamp-titlebar-label">HydraAmp Classic · FM / MP3 Deck</span>
+          <span className="winamp-titlebar-label">HelmAmp Classic · FM / MP3 Deck</span>
           <div className="winamp-titlebar-actions" aria-hidden="true">
             <span />
             <span />

@@ -47,13 +47,6 @@ const BUILT_IN_ROLES: HiveRoleTemplate[] = [
     model: 'sonnet',
     claudeMdPath: resolveMainAssetPath('hive', 'roles', 'ops.md'),
     description: 'Infrastructure, automation, CI/CD, and reliability'
-  },
-  {
-    name: 'strategist',
-    displayName: 'Strategist',
-    model: 'opus',
-    claudeMdPath: resolveMainAssetPath('hive', 'roles', 'strategist.md'),
-    description: 'Business strategy, customer success, and domain work'
   }
 ]
 

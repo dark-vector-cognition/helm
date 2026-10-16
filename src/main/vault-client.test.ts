@@ -19,7 +19,7 @@ vi.mock('fs/promises', () => ({
 
 const baseConfig = {
   vaultRagEndpoint: 'http://127.0.0.1:8742',
-  vaultPath: '/Users/test/Documents/ai/obsidian-vault',
+  vaultPath: '/home/test/Documents/ai/obsidian-vault',
   vaultRagLocation: 'local' as const,
   vaultRagRemoteHost: 'vault-host.example'
 }
@@ -247,7 +247,7 @@ describe('VaultClient', () => {
       expect(result.success).toBe(true)
       expect(mockWriteFile).toHaveBeenCalledTimes(1)
       const [filePath, contents] = mockWriteFile.mock.calls[0]
-      expect(filePath).toBe('/Users/test/Documents/ai/obsidian-vault/Inbox/Operator Note.md')
+      expect(filePath).toBe('/home/test/Documents/ai/obsidian-vault/Inbox/Operator Note.md')
       expect(contents).toContain('---\ntitle: "Operator Note"')
       expect(contents).toContain('source: helm')
       expect(contents).toContain('Ship the patch')
@@ -258,7 +258,7 @@ describe('VaultClient', () => {
       await client.pushNote('my/bad:file*name', 'Body')
 
       const [filePath] = mockWriteFile.mock.calls[0]
-      expect(filePath).toBe('/Users/test/Documents/ai/obsidian-vault/Inbox/my-bad-file-name.md')
+      expect(filePath).toBe('/home/test/Documents/ai/obsidian-vault/Inbox/my-bad-file-name.md')
     })
 
     it('uses Inbox as default folder', async () => {
@@ -266,7 +266,7 @@ describe('VaultClient', () => {
       await client.pushNote('Default Folder', 'Body')
 
       const [dirPath] = mockMkdir.mock.calls[0]
-      expect(dirPath).toBe('/Users/test/Documents/ai/obsidian-vault/Inbox')
+      expect(dirPath).toBe('/home/test/Documents/ai/obsidian-vault/Inbox')
     })
 
     it('returns conflict error when file exists', async () => {
@@ -287,14 +287,14 @@ describe('VaultClient', () => {
       expect(mockExecFile).toHaveBeenNthCalledWith(
         1,
         'git',
-        ['-C', '/Users/test/Documents/ai/obsidian-vault', 'add', '/Users/test/Documents/ai/obsidian-vault/Inbox/Commit Me.md'],
+        ['-C', '/home/test/Documents/ai/obsidian-vault', 'add', '/home/test/Documents/ai/obsidian-vault/Inbox/Commit Me.md'],
         expect.objectContaining({ timeout: 30000 }),
         expect.any(Function)
       )
       expect(mockExecFile).toHaveBeenNthCalledWith(
         2,
         'git',
-        ['-C', '/Users/test/Documents/ai/obsidian-vault', 'commit', '-m', 'HELM: add Commit Me', '--', '/Users/test/Documents/ai/obsidian-vault/Inbox/Commit Me.md'],
+        ['-C', '/home/test/Documents/ai/obsidian-vault', 'commit', '-m', 'HELM: add Commit Me', '--', '/home/test/Documents/ai/obsidian-vault/Inbox/Commit Me.md'],
         expect.objectContaining({ timeout: 30000 }),
         expect.any(Function)
       )
@@ -408,6 +408,44 @@ describe('VaultClient', () => {
       expect(result.success).toBe(false)
       expect(result.error).toContain('not configured')
       expect(mockExecFile).not.toHaveBeenCalled()
+    })
+
+    it('refuses remote reindex when the remote host is only whitespace', async () => {
+      const client = new VaultClient({
+        ...baseConfig,
+        vaultRagLocation: 'remote',
+        vaultRagRemoteHost: '   '
+      })
+      const result = await client.triggerReindex()
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('not configured')
+      expect(mockExecFile).not.toHaveBeenCalled()
+    })
+
+    it('runs the local script and never calls ssh in local mode with an empty remote host', async () => {
+      mockExecFile.mockImplementationOnce(
+        (_file: string, _args: string[], _options: unknown, callback: Function) => {
+          callback(null, 'Processed 3 files\nCompleted in 100ms\n', '')
+        }
+      )
+
+      const client = new VaultClient({
+        ...baseConfig,
+        vaultRagLocation: 'local',
+        vaultRagRemoteHost: ''
+      })
+      const result = await client.triggerReindex()
+
+      expect(result.success).toBe(true)
+      expect(mockExecFile).toHaveBeenCalledTimes(1)
+      expect(mockExecFile).toHaveBeenCalledWith(
+        'python3',
+        ['scripts/full_reindex.py'],
+        expect.objectContaining({ cwd: expect.stringContaining('/vault-rag') }),
+        expect.any(Function)
+      )
+      expect(mockExecFile.mock.calls.some((call) => call[0] === 'ssh')).toBe(false)
     })
 
     it('returns error when script fails', async () => {

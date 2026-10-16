@@ -1,5 +1,5 @@
 /**
- * AudioEngine — singleton that holds the HTMLAudioElement and persists across page navigation.
+ * AudioEngine - singleton that holds the HTMLAudioElement and persists across page navigation.
  * FMRadio.tsx controls it, but the element lives outside any React component lifecycle.
  */
 

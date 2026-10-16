@@ -1,5 +1,5 @@
 /* ─────────────────────────────────────────────
-   HYDRA Design Tokens — Winamp Chrome System
+   HELM Design Tokens - Winamp Chrome System
    Tiers: Shell Chrome → Surface → Panel → Card → Display Well → Control → Overlay
    Shape: lg (0.75rem) · md (0.5rem) · sm (0.25rem) · pill (999px)
    ───────────────────────────────────────────── */
@@ -107,7 +107,7 @@
   --helm-scrollbar-thumb-hover: rgba(140, 180, 220, 0.55);
 }
 
-/* ── ORBITER SKIN — warmer chrome, teal accent ── */
+/* ── ORBITER SKIN - warmer chrome, teal accent ── */
 [data-skin='glass'] {
   --helm-accent: #00ffc8;
   --helm-accent-warm: #ffc86e;
@@ -181,7 +181,7 @@
   --helm-scrollbar-thumb-hover: rgba(140, 210, 190, 0.55);
 }
 
-/* ── FORGE SKIN — reactor gold on black, all opaque, no blur ── */
+/* ── FORGE SKIN - reactor gold on black, all opaque, no blur ── */
 [data-skin='forge'] {
   --helm-accent: #ffd280;
   --helm-accent-warm: #ffb347;
@@ -258,7 +258,7 @@
   --helm-scrollbar-thumb-hover: rgba(220, 185, 130, 0.60);
 }
 
-/* ── PHANTOM SKIN — deep violet neon on obsidian, night ops ── */
+/* ── PHANTOM SKIN - deep violet neon on obsidian, night ops ── */
 [data-skin='phantom'] {
   --helm-accent: #bf7aff;
   --helm-accent-warm: #ff7ab8;

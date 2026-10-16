@@ -12,8 +12,6 @@ import {
   insertNotification,
   getNotifications,
   dismissNotification,
-  insertPostureHistory,
-  getPostureHistory,
   insertTimelineEvent,
   getTimelineEvents,
   insertLogLines,
@@ -25,7 +23,6 @@ import type {
   AutoHealEvent,
   BriefingResult,
   HelmNotification,
-  SecurityPosture,
   LogLine
 } from '../../shared/types'
 
@@ -64,14 +61,40 @@ describe('SQLite persistence', () => {
       expect(names).toContain('alerts')
       expect(names).toContain('briefings')
       expect(names).toContain('notifications')
-      expect(names).toContain('posture_history')
       expect(names).toContain('logs')
       expect(names).toContain('sessions')
       expect(names).toContain('timeline_events')
     })
 
-    it('should be idempotent — calling initializeSchema twice does not error', () => {
+    it('should be idempotent - calling initializeSchema twice does not error', () => {
       expect(() => initializeSchema(db)).not.toThrow()
+    })
+
+    it('leaves a table from an earlier release alone, with its rows', () => {
+      // An upgrade must never drop user data. A table this release no longer creates or reads
+      // stays exactly as it was, and initializeSchema neither alters nor empties it.
+      db.exec(
+        'CREATE TABLE legacy_scores (id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp INTEGER NOT NULL, score INTEGER NOT NULL, grade TEXT NOT NULL, verdict TEXT NOT NULL)'
+      )
+      db.prepare('INSERT INTO legacy_scores (timestamp, score, grade, verdict) VALUES (?, ?, ?, ?)').run(
+        1700000000000,
+        85,
+        'B+',
+        'kept'
+      )
+
+      initializeSchema(db)
+      initializeSchema(db)
+
+      const rows = db.prepare('SELECT score, grade, verdict FROM legacy_scores').all()
+      expect(rows).toEqual([{ score: 85, grade: 'B+', verdict: 'kept' }])
+    })
+
+    it('does not create the retired history table on a fresh database', () => {
+      const names = (
+        db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as { name: string }[]
+      ).map((t) => t.name)
+      expect(names.some((name) => name.endsWith('_history'))).toBe(false)
     })
   })
 
@@ -203,48 +226,6 @@ describe('SQLite persistence', () => {
     })
   })
 
-  describe('posture history', () => {
-    function makePosture(overrides: Partial<SecurityPosture> = {}): SecurityPosture {
-      return {
-        overallScore: 85,
-        grade: 'B+',
-        verdict: 'Good posture — minor issues found',
-        categories: [{ name: 'Firewall', score: 90, weight: 1, summary: 'Well configured' }],
-        ...overrides
-      }
-    }
-
-    it('should insert and retrieve posture history', () => {
-      insertPostureHistory(makePosture({ overallScore: 85, grade: 'B+' }))
-      const rows = getPostureHistory(10)
-      expect(rows).toHaveLength(1)
-      expect(rows[0].score).toBe(85)
-      expect(rows[0].grade).toBe('B+')
-      expect(rows[0].verdict).toBe('Good posture — minor issues found')
-      expect(rows[0].timestamp).toBeGreaterThan(0)
-    })
-
-    it('should return most recent first', () => {
-      insertPostureHistory(makePosture({ overallScore: 70, grade: 'C' }))
-      insertPostureHistory(makePosture({ overallScore: 85, grade: 'B+' }))
-      insertPostureHistory(makePosture({ overallScore: 95, grade: 'A' }))
-      const rows = getPostureHistory(10)
-      expect(rows).toHaveLength(3)
-      // Most recent (last inserted) should be first
-      expect(rows[0].score).toBe(95)
-      expect(rows[1].score).toBe(85)
-      expect(rows[2].score).toBe(70)
-    })
-
-    it('should respect the limit parameter', () => {
-      for (let i = 0; i < 5; i++) {
-        insertPostureHistory(makePosture({ overallScore: 60 + i * 5 }))
-      }
-      const rows = getPostureHistory(3)
-      expect(rows).toHaveLength(3)
-    })
-  })
-
   describe('logs', () => {
     it('stores and retrieves recent log lines in chronological order', () => {
       const lines: LogLine[] = [
@@ -270,7 +251,7 @@ describe('SQLite persistence', () => {
         timestamp: 1700000000000,
         type: 'agent_action',
         source: 'botbotfromuk-v1',
-        message: 'botbotfromuk-v1 [t17] post comment via github_api -> kunalnano/hydra#11',
+        message: 'botbotfromuk-v1 [t17] post comment via github_api -> example-org/sample-repo#11',
         metadata: JSON.stringify({ tick: 17, eventType: 'external_action' })
       })
 

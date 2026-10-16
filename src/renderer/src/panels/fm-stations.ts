@@ -291,7 +291,7 @@ export const FM_STATIONS: RadioStation[] = [
   },
 
   // ── Soul / R&B ──
-  // Oprah Radio (SiriusXM Ch 51) — no public stream available. SiriusXM requires paid subscription.
+  // Oprah Radio (SiriusXM Ch 51) - no public stream available. SiriusXM requires paid subscription.
   {
     id: 'wbls',
     callSign: 'WBLS',
