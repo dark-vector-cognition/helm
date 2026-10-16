@@ -218,7 +218,7 @@ describe('checkRamClimbRate', () => {
     for (let i = 0; i < 10; i++) {
       checkRamClimbRate(50)
     }
-    // Now jump to 75% — climb of 25% (above 20% threshold)
+    // Now jump to 75% - climb of 25% (above 20% threshold)
     const result = checkRamClimbRate(75)
     expect(result).not.toBeNull()
     expect(result!).toBeCloseTo(25, 0)
@@ -229,7 +229,7 @@ describe('checkRamClimbRate', () => {
     for (let i = 0; i < 10; i++) {
       checkRamClimbRate(50)
     }
-    // Small jump to 55% — climb of 5%, below 15% threshold
+    // Small jump to 55% - climb of 5%, below 15% threshold
     const result = checkRamClimbRate(55)
     expect(result).toBeNull()
   })

@@ -47,7 +47,7 @@ export function buildBriefingPrompt(state: SystemState): string {
   const unhealthy = healthResult.workspaces.filter((w) => w.level !== 'green')
   if (unhealthy.length > 0) {
     const healthLines = unhealthy.map(
-      (w) => `- ${w.name}: ${w.level.toUpperCase()} \u2014 ${w.reasons.join(', ')}`
+      (w) => `- ${w.name}: ${w.level.toUpperCase()} - ${w.reasons.join(', ')}`
     )
     sections.push(`## Health Alerts\n${healthLines.join('\n')}`)
   }
@@ -100,7 +100,7 @@ Required JSON shape:
 Rules:
 - Be concise. This is a dashboard briefing, not a report.
 - Only raise alerts for things that actually need attention.
-- Suggestions should be actionable (e.g. "commit changes on project X", "agent idle — consider assigning work").
+- Suggestions should be actionable (e.g. "commit changes on project X", "agent idle - consider assigning work").
 - CPU > 80% = warning. CPU > 95% = critical.
 - Memory > 85% = warning. Memory > 95% = critical.
 - Dirty git repos with uncommitted changes for context = info suggestion.
@@ -191,7 +191,7 @@ export async function generateBriefing(state: SystemState): Promise<BriefingResu
 
     return {
       summary: isOffline
-        ? `LM Studio offline \u2014 unable to reach ${connection.url}`
+        ? `LM Studio offline - unable to reach ${connection.url}`
         : `Briefing failed: ${message}`,
       alerts: [
         {

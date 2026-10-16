@@ -759,7 +759,7 @@ export async function getNetworkActivity(): Promise<NetworkState> {
       totalBytesOutPerSec: 0,
       timestamp: now,
       sourceMode: 'unavailable',
-      error: 'Network monitoring unavailable — netstat failed on Windows'
+      error: 'Network monitoring unavailable - netstat failed on Windows'
     }
   }
 
@@ -795,7 +795,7 @@ export async function getNetworkActivity(): Promise<NetworkState> {
     totalBytesOutPerSec: 0,
     timestamp: now,
     sourceMode: 'unavailable',
-    error: 'Network monitoring unavailable — nettop and netstat both failed'
+    error: 'Network monitoring unavailable - nettop and netstat both failed'
   }
 }
 

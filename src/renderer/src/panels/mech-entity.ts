@@ -1,5 +1,5 @@
 /**
- * Mechanical entity visualizer — geometry, antenna logic, plate/node builders.
+ * Mechanical entity visualizer - geometry, antenna logic, plate/node builders.
  *
  * Each system entity (workspace, agent, port, git repo) becomes an antenna spike
  * on a breathing reactor core made of armor plates, circuit nodes, and a nucleus.

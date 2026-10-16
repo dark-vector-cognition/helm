@@ -14,7 +14,7 @@ DIM='\033[2m'
 RESET='\033[0m'
 
 usage() {
-  echo -e "${BOLD}HELM${RESET} — Mission Control CLI"
+  echo -e "${BOLD}HELM${RESET} - Mission Control CLI"
   echo ""
   echo -e "  ${CYAN}helm${RESET}              Launch app (dev mode)"
   echo -e "  ${CYAN}helm test${RESET}         Run all tests"

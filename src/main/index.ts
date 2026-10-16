@@ -62,7 +62,7 @@ function createWindow(): void {
     height: 800,
     minWidth: 900,
     minHeight: 600,
-    title: 'HELM — Mission Control',
+    title: 'HELM - Mission Control',
     show: false,
     paintWhenInitiallyHidden: true,
     backgroundColor: '#111827',
@@ -98,7 +98,7 @@ function createWindow(): void {
         shell.openExternal(details.url)
       }
     } catch {
-      // Malformed URL — ignore
+      // Malformed URL - ignore
     }
     return { action: 'deny' }
   })
@@ -123,9 +123,9 @@ function createWindow(): void {
       const health = evaluateSystemHealth(state)
       tray.setImage(createTrayIcon(health))
       const tooltips = {
-        green: 'HELM — All systems nominal',
-        yellow: 'HELM — Warning: attention needed',
-        red: 'HELM — Critical: immediate attention required'
+        green: 'HELM - All systems nominal',
+        yellow: 'HELM - Warning: attention needed',
+        red: 'HELM - Critical: immediate attention required'
       }
       tray.setToolTip(tooltips[health])
     }
@@ -180,7 +180,7 @@ function evaluateSystemHealth(state: SystemState): 'green' | 'yellow' | 'red' {
 
 function createTray(): void {
   tray = new Tray(createTrayIcon('green'))
-  tray.setToolTip('HELM — All systems nominal')
+  tray.setToolTip('HELM - All systems nominal')
 
   const contextMenu = Menu.buildFromTemplate([
     {

@@ -319,7 +319,7 @@ function CommandRow({
 
         {showPorts && (
           <span className="text-gray-500 text-xs font-mono w-20 text-right truncate">
-            {group.ports.length > 0 ? group.ports.map((p) => `:${p}`).join(' ') : '\u2014'}
+            {group.ports.length > 0 ? group.ports.map((p) => `:${p}`).join(' ') : '-'}
           </span>
         )}
 
@@ -344,7 +344,7 @@ function CommandRow({
               )}
             </>
           ) : (
-            <span className="text-gray-700">{'\u2014'}</span>
+            <span className="text-gray-700">{'-'}</span>
           )}
         </span>
 

@@ -3,7 +3,7 @@ import type { ProcessInfo, AgentInfo, AgentStatus } from '../../shared/types'
 interface AgentPattern {
   type: AgentInfo['type']
   displayName: string
-  /** Match functions — first match wins. Receives the full process record. */
+  /** Match functions - first match wins. Receives the full process record. */
   match: (proc: ProcessInfo) => boolean
   dedupeKey?: (proc: ProcessInfo) => string
   priority?: (proc: ProcessInfo) => number

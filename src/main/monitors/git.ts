@@ -225,7 +225,7 @@ const SAFE_GIT_ACTIONS = ['pull', 'push', 'stash', 'stash pop', 'fetch'] as cons
 
 /**
  * Execute a safe git action on a repo.
- * Only whitelisted commands are allowed — no arbitrary shell execution.
+ * Only whitelisted commands are allowed - no arbitrary shell execution.
  */
 export async function runGitAction(repoPath: string, action: string): Promise<GitActionResult> {
   if (!SAFE_GIT_ACTIONS.includes(action as (typeof SAFE_GIT_ACTIONS)[number])) {
