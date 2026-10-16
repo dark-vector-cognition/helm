@@ -1,5 +1,5 @@
 import { join, basename } from 'path'
-import { homedir } from 'os'
+import { homedir } from 'node:os'
 import { pathToFileURL } from 'node:url'
 import { loadEnvironment } from './app-paths'
 

@@ -410,6 +410,44 @@ describe('VaultClient', () => {
       expect(mockExecFile).not.toHaveBeenCalled()
     })
 
+    it('refuses remote reindex when the remote host is only whitespace', async () => {
+      const client = new VaultClient({
+        ...baseConfig,
+        vaultRagLocation: 'remote',
+        vaultRagRemoteHost: '   '
+      })
+      const result = await client.triggerReindex()
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('not configured')
+      expect(mockExecFile).not.toHaveBeenCalled()
+    })
+
+    it('runs the local script and never calls ssh in local mode with an empty remote host', async () => {
+      mockExecFile.mockImplementationOnce(
+        (_file: string, _args: string[], _options: unknown, callback: Function) => {
+          callback(null, 'Processed 3 files\nCompleted in 100ms\n', '')
+        }
+      )
+
+      const client = new VaultClient({
+        ...baseConfig,
+        vaultRagLocation: 'local',
+        vaultRagRemoteHost: ''
+      })
+      const result = await client.triggerReindex()
+
+      expect(result.success).toBe(true)
+      expect(mockExecFile).toHaveBeenCalledTimes(1)
+      expect(mockExecFile).toHaveBeenCalledWith(
+        'python3',
+        ['scripts/full_reindex.py'],
+        expect.objectContaining({ cwd: expect.stringContaining('/vault-rag') }),
+        expect.any(Function)
+      )
+      expect(mockExecFile.mock.calls.some((call) => call[0] === 'ssh')).toBe(false)
+    })
+
     it('returns error when script fails', async () => {
       mockExecFile.mockImplementationOnce(
         (_file: string, _args: string[], _options: unknown, callback: Function) => {
