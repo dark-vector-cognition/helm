@@ -21,10 +21,10 @@ Helm Light: the open-source release.
 - Picked up the patched transitive packages from the open security updates: `@xmldom/xmldom`, `lodash`, `ip-address`, `picomatch`, `tmp`, `flatted`, and `tar`
 - Node.js 22.12 or newer is now required. CI and release jobs run on Node 22
 - Added Windows code paths for the network, port, process, battery, disk, and firewall monitors, plus Windows process protection and `taskkill` handling. These are covered by unit tests but have not been exercised on real Windows hardware
+- The Windows firewall (`netsh`) parser splits rules on the rule name line and accepts CRLF output, so each rule keeps its own name and action
 - Security scans run with a plain terminal environment so output parses the same on every platform
 
 ### Fixes
-- Fixed Windows firewall rule parsing. Rules were split on the dashed separator, so names and actions could be paired with the wrong rule, and CRLF output never matched
 - Remote vault reindex refuses a blank or whitespace-only host and never starts `ssh`. Local mode with the empty default host runs the local script. Both cases are tested
 - Agent detection no longer counts desktop apps, one-shot exec jobs, or helper services as standing agents
 - Quieter defaults: native notifications only for critical alerts, longer throttle and cooldown windows, and higher auto-heal thresholds

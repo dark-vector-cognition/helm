@@ -11,7 +11,7 @@ For anyone who cloned an earlier version:
 - **Apache-2.0.** HELM moves from PolyForm Noncommercial 1.0.0 to the Apache License 2.0, so you can use, modify, and redistribute it, including commercially. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
 - **First run works without a model.** The app starts and every page renders with no model configured. AI briefings are optional and work with any OpenAI-compatible server (LM Studio, Ollama, llama.cpp, and others). With nothing configured, HELM only checks your own machine on the default port and never scans your network.
 - **Electron 41.** Electron 35 to 41.10.7, with `better-sqlite3` 12.11.1 and refreshed build tooling. Node.js 22.12 or newer is now required.
-- **Fixes.** Windows code paths for the port, network, process, battery, disk, and firewall monitors, a fix for Windows firewall rule parsing, tighter agent detection, quieter notifications, and a guard so a blank remote vault host can never start an `ssh` call. Details are in the [CHANGELOG](CHANGELOG.md).
+- **Fixes and platform work.** Windows code paths for the port, network, process, battery, disk, and firewall monitors, tighter agent detection, quieter notifications, and a guard so a blank remote vault host can never start an `ssh` call. Details are in the [CHANGELOG](CHANGELOG.md).
 
 Helm Go, the full signed build with auto-update and support, is coming soon.
 
