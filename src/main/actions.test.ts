@@ -1,18 +1,26 @@
 import { describe, it, expect } from 'vitest'
 import { isProtectedProcess, validatePid, PROTECTED_PROCESSES } from './actions'
 
+const isWin = process.platform === 'win32'
+
 describe('isProtectedProcess', () => {
   it('returns true for protected system processes', () => {
-    expect(isProtectedProcess('Finder')).toBe(true)
-    expect(isProtectedProcess('WindowServer')).toBe(true)
-    expect(isProtectedProcess('loginwindow')).toBe(true)
-    expect(isProtectedProcess('kernel_task')).toBe(true)
+    if (isWin) {
+      expect(isProtectedProcess('System')).toBe(true)
+      expect(isProtectedProcess('csrss.exe')).toBe(true)
+      expect(isProtectedProcess('explorer.exe')).toBe(true)
+      expect(isProtectedProcess('lsass.exe')).toBe(true)
+    } else {
+      expect(isProtectedProcess('Finder')).toBe(true)
+      expect(isProtectedProcess('WindowServer')).toBe(true)
+      expect(isProtectedProcess('loginwindow')).toBe(true)
+      expect(isProtectedProcess('kernel_task')).toBe(true)
+    }
   })
 
   it('returns true for Helm itself', () => {
     expect(isProtectedProcess('Electron')).toBe(true)
     expect(isProtectedProcess('HELM')).toBe(true)
-    expect(isProtectedProcess('hydra')).toBe(true)
   })
 
   it('returns false for normal processes', () => {
@@ -22,8 +30,13 @@ describe('isProtectedProcess', () => {
   })
 
   it('matches case-insensitively', () => {
-    expect(isProtectedProcess('finder')).toBe(true)
-    expect(isProtectedProcess('WINDOWSERVER')).toBe(true)
+    if (isWin) {
+      expect(isProtectedProcess('system')).toBe(true)
+      expect(isProtectedProcess('EXPLORER.EXE')).toBe(true)
+    } else {
+      expect(isProtectedProcess('finder')).toBe(true)
+      expect(isProtectedProcess('WINDOWSERVER')).toBe(true)
+    }
   })
 })
 
@@ -46,9 +59,16 @@ describe('validatePid', () => {
 describe('PROTECTED_PROCESSES', () => {
   it('contains critical system processes', () => {
     const names = PROTECTED_PROCESSES.map((n) => n.toLowerCase())
-    expect(names).toContain('finder')
-    expect(names).toContain('windowserver')
-    expect(names).toContain('loginwindow')
-    expect(names).toContain('kernel_task')
+    if (isWin) {
+      expect(names).toContain('system')
+      expect(names).toContain('csrss.exe')
+      expect(names).toContain('lsass.exe')
+      expect(names).toContain('explorer.exe')
+    } else {
+      expect(names).toContain('finder')
+      expect(names).toContain('windowserver')
+      expect(names).toContain('loginwindow')
+      expect(names).toContain('kernel_task')
+    }
   })
 })

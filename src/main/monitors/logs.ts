@@ -3,7 +3,8 @@ import { readFile, stat } from 'fs/promises'
 import { basename, join } from 'path'
 import { exec } from 'child_process'
 import { promisify } from 'util'
-import { tmpdir } from 'os'
+import { homedir, tmpdir } from 'os'
+import { isWindows } from '../platform'
 import type { HelmConfig, LogLine } from '../../shared/types'
 
 const execAsync = promisify(exec)
@@ -110,12 +111,44 @@ async function watchLogFile(filePath: string): Promise<void> {
   watchedFiles.set(filePath, watched)
 }
 
+async function expandGlobPattern(pattern: string): Promise<string[]> {
+  try {
+    let stdout: string
+
+    if (isWindows()) {
+      const cmd = `powershell.exe -NoProfile -Command "Get-ChildItem -Path '${pattern}' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName"`
+      const result = await execAsync(cmd, { timeout: 5000 })
+      stdout = result.stdout
+    } else {
+      const result = await execAsync(`ls ${pattern} 2>/dev/null || true`)
+      stdout = result.stdout
+    }
+
+    return stdout
+      .trim()
+      .split('\n')
+      .filter((f) => f.length > 0)
+  } catch {
+    return []
+  }
+}
+
 async function discoverLogFiles(config?: HelmConfig): Promise<string[]> {
-  const home = process.env.HOME || ''
-  const defaultPatterns = [
-    join(home, '.claude', 'projects', '*', 'logs', '*.log'),
-    join(tmpdir(), 'helm-*.log')
-  ]
+  const home = homedir()
+  const today = new Date().toISOString().split('T')[0]
+  const yearMonth = today.slice(0, 7)
+
+  const defaultPatterns = isWindows()
+    ? [
+        join(home, '.claude', 'projects', '*', 'logs', '*.log'),
+        join(tmpdir(), 'helm-*.log'),
+        join(home, '.lmstudio', 'server-logs', yearMonth, '*.log'),
+        join(home, 'AppData', 'Local', 'npm-cache', '_logs', '*.log')
+      ]
+    : [
+        join(home, '.claude', 'projects', '*', 'logs', '*.log'),
+        join(tmpdir(), 'helm-*.log')
+      ]
 
   const files: string[] = []
 
@@ -127,16 +160,8 @@ async function discoverLogFiles(config?: HelmConfig): Promise<string[]> {
   }
 
   for (const pattern of defaultPatterns) {
-    try {
-      const { stdout } = await execAsync(`ls ${pattern} 2>/dev/null || true`)
-      const found = stdout
-        .trim()
-        .split('\n')
-        .filter((f) => f.length > 0)
-      files.push(...found)
-    } catch {
-      // Pattern matched nothing
-    }
+    const found = await expandGlobPattern(pattern)
+    files.push(...found)
   }
 
   return [...new Set(files)]

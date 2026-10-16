@@ -1,6 +1,7 @@
 import { exec } from 'child_process'
 import { setTimeout as delay } from 'timers/promises'
 import { promisify } from 'util'
+import { promises as dns } from 'dns'
 import type {
   NetworkConnection,
   NetworkProcess,
@@ -8,9 +9,73 @@ import type {
   NetworkSourceMode,
   NetworkState
 } from '../../shared/types'
-import { isMacOS } from '../platform'
+import { isMacOS, isWindows } from '../platform'
 
 const execAsync = promisify(exec)
+
+// ── Reverse DNS cache ──────────────────────────────────────────
+const dnsCache = new Map<string, { host: string; expires: number }>()
+const DNS_TTL_MS = 5 * 60 * 1000 // 5 minute cache
+const DNS_TIMEOUT_MS = 2000
+const pendingLookups = new Set<string>()
+
+function isPrivateIp(ip: string): boolean {
+  return (
+    ip.startsWith('127.') ||
+    ip.startsWith('10.') ||
+    ip.startsWith('192.168.') ||
+    ip.startsWith('172.16.') || ip.startsWith('172.17.') || ip.startsWith('172.18.') ||
+    ip.startsWith('172.19.') || ip.startsWith('172.2') || ip.startsWith('172.3') ||
+    ip === '::1' || ip.startsWith('fe80:') || ip.startsWith('fd')
+  )
+}
+
+async function resolveHost(ip: string): Promise<string | undefined> {
+  const normalized = ip.replace(/^::ffff:/, '')
+  if (isPrivateIp(normalized) || normalized === 'localhost') return undefined
+
+  const cached = dnsCache.get(normalized)
+  if (cached && cached.expires > Date.now()) return cached.host
+
+  if (pendingLookups.has(normalized)) return cached?.host
+
+  pendingLookups.add(normalized)
+  try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), DNS_TIMEOUT_MS)
+    const hostnames = await dns.reverse(normalized)
+    clearTimeout(timeout)
+    const host = hostnames[0] ?? undefined
+    if (host) {
+      dnsCache.set(normalized, { host, expires: Date.now() + DNS_TTL_MS })
+    }
+    return host
+  } catch {
+    // Cache the failure so we don't retry constantly
+    dnsCache.set(normalized, { host: normalized, expires: Date.now() + DNS_TTL_MS })
+    return undefined
+  } finally {
+    pendingLookups.delete(normalized)
+  }
+}
+
+export async function enrichConnectionsWithDns(connections: NetworkConnection[]): Promise<void> {
+  const internetConnections = connections.filter((c) => c.scope === 'internet')
+  const uniqueIps = [...new Set(internetConnections.map((c) => c.remoteAddress.replace(/^::ffff:/, '')))]
+
+  // Resolve up to 10 IPs per cycle to avoid blocking
+  const batch = uniqueIps.slice(0, 10)
+  await Promise.allSettled(batch.map((ip) => resolveHost(ip)))
+
+  // Apply cached results to all connections
+  for (const conn of connections) {
+    const normalized = conn.remoteAddress.replace(/^::ffff:/, '')
+    const cached = dnsCache.get(normalized)
+    if (cached && cached.host !== normalized) {
+      conn.resolvedHost = cached.host
+    }
+  }
+}
 
 interface RawNetworkEntry {
   name: string
@@ -455,6 +520,171 @@ function buildNetworkStateFromSnapshot(
   }
 }
 
+/**
+ * Parse Windows `netstat -e` output to get interface-level byte totals.
+ * Output format:
+ *   Interface Statistics
+ *                              Received            Sent
+ *   Bytes                     123456789        98765432
+ */
+export function parseWindowsNetstatE(raw: string): { bytesIn: number; bytesOut: number } | null {
+  const lines = raw.trim().split('\n')
+  for (const line of lines) {
+    const match = line.match(/^\s*Bytes\s+(\d+)\s+(\d+)/i)
+    if (match) {
+      const bytesIn = Number.parseInt(match[1], 10)
+      const bytesOut = Number.parseInt(match[2], 10)
+      if (Number.isFinite(bytesIn) && Number.isFinite(bytesOut)) {
+        return { bytesIn, bytesOut }
+      }
+    }
+  }
+  return null
+}
+
+/**
+ * Parse Windows `netstat -ano` output into connection entries.
+ * Lines look like:
+ *   TCP    192.168.1.5:49721    142.250.80.46:443    ESTABLISHED    12345
+ */
+export function parseWindowsNetstatAno(raw: string): RawNetworkConnection[] {
+  const lines = raw.trim().split('\n')
+  const connections: RawNetworkConnection[] = []
+
+  for (const line of lines) {
+    const cols = line.trim().split(/\s+/)
+    if (cols.length < 4) continue
+
+    const protocol = cols[0].toLowerCase()
+    if (protocol !== 'tcp' && protocol !== 'udp') continue
+
+    const localRaw = cols[1]
+    const remoteRaw = cols[2]
+    const state = protocol === 'tcp' ? (cols[3] || '') : ''
+    const pidStr = protocol === 'tcp' ? cols[4] : cols[3]
+    const pid = Number.parseInt(pidStr || '0', 10)
+    if (!Number.isFinite(pid) || pid <= 0) continue
+
+    const local = splitWindowsEndpoint(localRaw)
+    const remote = splitWindowsEndpoint(remoteRaw)
+    const scope = classifyNetworkScope(local.address, remote.address)
+
+    const connection = {
+      processName: `pid-${pid}`,
+      pid,
+      protocol,
+      state,
+      localAddress: local.address,
+      localPort: local.port,
+      remoteAddress: remote.address,
+      remotePort: remote.port,
+      scope,
+      bytesIn: 0,
+      bytesOut: 0
+    }
+
+    connections.push({
+      ...connection,
+      id: buildConnectionId(connection)
+    })
+  }
+
+  return connections
+}
+
+/**
+ * Split a Windows netstat endpoint like "192.168.1.5:443" or "[::1]:8080" or "0.0.0.0:0".
+ */
+function splitWindowsEndpoint(raw: string): { address: string; port: number | null } {
+  const trimmed = raw.trim()
+  if (!trimmed || trimmed === '*:*') {
+    return { address: '*', port: null }
+  }
+
+  // IPv6 bracket notation: [::1]:port
+  const ipv6Match = trimmed.match(/^\[(.+)]:(\d+)$/)
+  if (ipv6Match) {
+    return {
+      address: ipv6Match[1],
+      port: Number.parseInt(ipv6Match[2], 10)
+    }
+  }
+
+  // IPv4: last colon separates address:port
+  const lastColon = trimmed.lastIndexOf(':')
+  if (lastColon === -1) return { address: trimmed, port: null }
+
+  const address = trimmed.slice(0, lastColon) || '*'
+  const portStr = trimmed.slice(lastColon + 1)
+  const port = /^\d+$/.test(portStr) ? Number.parseInt(portStr, 10) : null
+  return { address, port }
+}
+
+async function resolveWindowsPidNames(pids: Set<number>): Promise<Map<number, string>> {
+  const pidMap = new Map<number, string>()
+  if (pids.size === 0) return pidMap
+
+  try {
+    const { stdout } = await execAsync(
+      'powershell.exe -NoProfile -Command "Get-Process | Select-Object Id,ProcessName | Format-Table -HideTableHeaders -AutoSize"',
+      { timeout: 5000 }
+    )
+    for (const line of stdout.split('\n')) {
+      const match = line.trim().match(/^(\d+)\s+(.+)$/)
+      if (match) {
+        const pid = parseInt(match[1], 10)
+        if (pids.has(pid)) pidMap.set(pid, match[2].trim())
+      }
+    }
+  } catch {
+    // fallback: names stay as pid-XXXX
+  }
+
+  return pidMap
+}
+
+async function tryWindowsNetstat(): Promise<{
+  totals: RawNetworkEntry[] | null
+  connections: RawNetworkConnection[]
+}> {
+  let totals: RawNetworkEntry[] | null = null
+  let connections: RawNetworkConnection[] = []
+
+  try {
+    const { stdout } = await execAsync('netstat -e', { timeout: 5000 })
+    const parsed = parseWindowsNetstatE(stdout)
+    if (parsed) {
+      totals = [
+        {
+          name: 'System (all interfaces)',
+          pid: interfacePid('windows-netstat'),
+          bytesIn: parsed.bytesIn,
+          bytesOut: parsed.bytesOut
+        }
+      ]
+    }
+  } catch {
+    // netstat -e failed
+  }
+
+  try {
+    const { stdout } = await execAsync('netstat -ano', { timeout: 5000 })
+    connections = parseWindowsNetstatAno(stdout)
+
+    // Resolve PID -> process name
+    const pids = new Set(connections.map((c) => c.pid))
+    const nameMap = await resolveWindowsPidNames(pids)
+    for (const conn of connections) {
+      const name = nameMap.get(conn.pid)
+      if (name) conn.processName = name
+    }
+  } catch {
+    // netstat -ano failed
+  }
+
+  return { totals, connections }
+}
+
 async function tryNettop(): Promise<RawNettopSnapshot | null> {
   try {
     const { stdout } = await execAsync('nettop -n -x -L 1 -J state,bytes_in,bytes_out', {
@@ -506,7 +736,7 @@ async function buildNetstatFallbackState(initialEntries: RawNetworkEntry[]): Pro
 export async function getNetworkActivity(): Promise<NetworkState> {
   const now = Date.now()
 
-  if (!isMacOS()) {
+  if (!isMacOS() && !isWindows()) {
     return {
       processes: [],
       connections: [],
@@ -514,6 +744,22 @@ export async function getNetworkActivity(): Promise<NetworkState> {
       totalBytesOutPerSec: 0,
       timestamp: now,
       sourceMode: 'unavailable'
+    }
+  }
+
+  if (isWindows()) {
+    const { totals, connections } = await tryWindowsNetstat()
+    if (totals) {
+      return buildNetworkState(totals, connections, now, 'netstat')
+    }
+    return {
+      processes: [],
+      connections: [],
+      totalBytesInPerSec: 0,
+      totalBytesOutPerSec: 0,
+      timestamp: now,
+      sourceMode: 'unavailable',
+      error: 'Network monitoring unavailable — netstat failed on Windows'
     }
   }
 

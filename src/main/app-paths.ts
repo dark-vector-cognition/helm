@@ -23,6 +23,7 @@ function findUp(startDir: string, marker: string): string | null {
     if (parent === current) {
       return null
     }
+
     current = parent
   }
 }
@@ -44,6 +45,7 @@ function getPackagedResourceRoot(): string | null {
   if (typeof process.resourcesPath !== 'string' || process.resourcesPath.length === 0) {
     return null
   }
+
   return join(process.resourcesPath, RESOURCE_ROOT)
 }
 
@@ -65,10 +67,11 @@ export function resolveRepoPath(...segments: string[]): string {
 }
 
 export function resolveMainAssetPath(...segments: string[]): string {
+  const packagedRoot = getPackagedResourceRoot()
   const candidates = uniquePaths([
     join(__dirname, ...segments),
     join(getAppRoot(), SOURCE_MAIN_ROOT, ...segments),
-    getPackagedResourceRoot() ? join(getPackagedResourceRoot()!, ...segments) : null
+    packagedRoot ? join(packagedRoot, ...segments) : null
   ])
 
   for (const candidate of candidates) {

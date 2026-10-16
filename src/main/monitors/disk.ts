@@ -1,5 +1,6 @@
 import { exec } from 'child_process'
 import { promisify } from 'util'
+import { isWindows } from '../platform'
 
 const execAsync = promisify(exec)
 
@@ -70,14 +71,65 @@ export function parseDfOutput(raw: string): DiskMount[] {
 }
 
 /**
- * Get current disk usage by running `df -Pk`.
+ * Parse PowerShell Get-Volume CSV output into typed mount entries.
+ *
+ * Expected CSV columns: Filesystem, Mount, TotalBytes, UsedBytes, AvailableBytes
+ */
+export function parseWindowsDiskOutput(raw: string): DiskMount[] {
+  const lines = raw.trim().split('\n')
+  if (lines.length <= 1) return []
+
+  const results: DiskMount[] = []
+
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim().replace(/"/g, '')
+    if (!line) continue
+
+    const parts = line.split(',')
+    if (parts.length < 5) continue
+
+    const filesystem = parts[0].trim()
+    const mount = parts[1].trim()
+    const totalBytes = parseInt(parts[2].trim(), 10)
+    const usedBytes = parseInt(parts[3].trim(), 10)
+    const availableBytes = parseInt(parts[4].trim(), 10)
+
+    if (isNaN(totalBytes) || isNaN(usedBytes) || isNaN(availableBytes)) continue
+    if (totalBytes === 0) continue
+
+    const usagePercent = (usedBytes / totalBytes) * 100
+
+    results.push({
+      filesystem,
+      mount,
+      totalBytes,
+      usedBytes,
+      availableBytes,
+      usagePercent
+    })
+  }
+
+  return results
+}
+
+/**
+ * Get current disk usage by running `df -Pk` (Unix) or PowerShell Get-Volume (Windows).
  */
 export async function getDiskUsage(): Promise<DiskState> {
   const now = Date.now()
 
   try {
-    const { stdout } = await execAsync('df -Pk', { timeout: 5000 })
-    const mounts = parseDfOutput(stdout)
+    let mounts: DiskMount[]
+
+    if (isWindows()) {
+      const cmd = `powershell.exe -NoProfile -Command "Get-Volume | Where-Object {$_.DriveLetter -ne $null -and $_.Size -gt 0} | Select-Object @{N='Filesystem';E={$_.DriveLetter + ':'}}, @{N='Mount';E={$_.DriveLetter + ':\\\\'}}, @{N='TotalBytes';E={$_.Size}}, @{N='UsedBytes';E={$_.Size - $_.SizeRemaining}}, @{N='AvailableBytes';E={$_.SizeRemaining}} | ConvertTo-Csv -NoTypeInformation"`
+      const { stdout } = await execAsync(cmd, { timeout: 10000 })
+      mounts = parseWindowsDiskOutput(stdout)
+    } else {
+      const { stdout } = await execAsync('df -Pk', { timeout: 5000 })
+      mounts = parseDfOutput(stdout)
+    }
+
     const maxUsagePercent = mounts.length > 0
       ? Math.max(...mounts.map((m) => m.usagePercent))
       : 0
