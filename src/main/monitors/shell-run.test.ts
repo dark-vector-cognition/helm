@@ -18,6 +18,7 @@ import {
 } from './shell-run'
 import { expandGlobPattern } from './logs'
 import { getRepoCommitHistory, scanForRepos } from './git'
+import { runFile, runGit } from './shell-run'
 
 // Paths that would break or hijack a PowerShell command string if they were pasted into one.
 const NASTY_PATHS = [
@@ -155,5 +156,51 @@ describe('commit history runs git with an argument array', () => {
     }
     expect(mockExecFile).not.toHaveBeenCalled()
     expect(mockExec).not.toHaveBeenCalled()
+  })
+})
+
+describe('a failed run keeps what the program printed', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  function failWith(stdout: string, stderr: string): void {
+    mockExecFile.mockImplementation(
+      (_file: string, _args: string[], _opts: unknown, cb: (e: Error | null, out: string, err: string) => void) =>
+        cb(Object.assign(new Error('Command failed: x'), { code: 1 }), stdout, stderr)
+    )
+  }
+
+  it('runGit rejects with the error plus its stdout and stderr', async () => {
+    failWith('partial output\n', 'fatal: nope\n')
+
+    const failure = await runGit(['status'], { cwd: '/repo' }).catch((error: unknown) => error)
+
+    expect(failure).toBeInstanceOf(Error)
+    expect(failure).toMatchObject({
+      message: 'Command failed: x',
+      code: 1,
+      stdout: 'partial output\n',
+      stderr: 'fatal: nope\n'
+    })
+  })
+
+  it('runFile does the same', async () => {
+    failWith('', 'find: missing\n')
+
+    const failure = await runFile('find', ['/x']).catch((error: unknown) => error)
+
+    expect(failure).toMatchObject({ stderr: 'find: missing\n', stdout: '' })
+  })
+
+  it('a missing output argument becomes an empty string, not the text undefined', async () => {
+    mockExecFile.mockImplementation(
+      (_file: string, _args: string[], _opts: unknown, cb: (e: Error | null) => void) =>
+        cb(new Error('spawn ENOENT'))
+    )
+
+    const failure = await runFile('nothing', []).catch((error: unknown) => error)
+
+    expect(failure).toMatchObject({ stdout: '', stderr: '' })
   })
 })

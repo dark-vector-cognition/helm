@@ -25,6 +25,12 @@ interface RunOptions {
   cwd?: string
 }
 
+/**
+ * Run a program and capture its output. A failure rejects with the error from execFile plus the
+ * captured `stdout` and `stderr`. The callback form of execFile passes them as separate arguments
+ * and leaves them off the error, so without this the program's own explanation, for example git's
+ * "No stash entries found.", would be lost.
+ */
 function runCapture(
   file: string,
   args: string[],
@@ -32,8 +38,9 @@ function runCapture(
 ): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
     execFile(file, args, { ...options, maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
-      if (error) reject(error)
-      else resolve({ stdout: String(stdout ?? ''), stderr: String(stderr ?? '') })
+      const captured = { stdout: String(stdout ?? ''), stderr: String(stderr ?? '') }
+      if (error) reject(Object.assign(error, captured))
+      else resolve(captured)
     })
   })
 }
