@@ -50,7 +50,7 @@ const AGENT_PATTERNS: AgentPattern[] = [
   {
     type: 'gemini',
     displayName: 'Gemini',
-    // CLI instances only. Native Gemini desktop helpers are not council agents.
+    // CLI instances only. Native Gemini desktop helpers are not standing agents.
     match: (proc) => {
       const lower = proc.command.toLowerCase()
       const hasGeminiExecutable = /(^|\s)(?:\S*\/)?gemini(?:\s|$)/i.test(proc.command)
