@@ -3,6 +3,7 @@ import { promisify } from 'util'
 import type { SecurityScanResult, SecurityPosture } from '../../shared/types'
 import { loadConfig } from '../config'
 import { loadEnvironment, resolvePathSetting } from '../app-paths'
+import { isWindows } from '../platform'
 
 const execAsync = promisify(exec)
 
@@ -14,13 +15,24 @@ import { access } from 'fs/promises'
 
 // Electron apps don't inherit the user's full shell PATH.
 // Ensure common user binary locations are included.
-const EXTRA_PATHS = [join(homedir(), '.local/bin'), '/opt/homebrew/bin', '/usr/local/bin']
+const UNIX_EXTRA_PATHS = [join(homedir(), '.local/bin'), '/opt/homebrew/bin', '/usr/local/bin']
+const WINDOWS_EXTRA_PATHS = [
+  join(homedir(), '.local', 'bin'),
+  join(homedir(), 'AppData', 'Local', 'Programs'),
+  join(homedir(), 'AppData', 'Local', 'Programs', 'Python', 'Python312', 'Scripts'),
+  join(homedir(), 'AppData', 'Local', 'Programs', 'Python', 'Python313', 'Scripts'),
+  join(process.env.ProgramFiles || 'C:\\Program Files', 'staff'),
+  join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'staff'),
+  'C:\\tools'
+]
+const EXTRA_PATHS = isWindows() ? WINDOWS_EXTRA_PATHS : UNIX_EXTRA_PATHS
 
 function ensureExtraPaths(): void {
   const currentPath = process.env.PATH || ''
+  const separator = isWindows() ? ';' : ':'
   const missing = EXTRA_PATHS.filter((p) => !currentPath.includes(p))
   if (missing.length > 0) {
-    process.env.PATH = [...missing, currentPath].join(':')
+    process.env.PATH = [...missing, currentPath].join(separator)
   }
 }
 ensureExtraPaths()
@@ -39,8 +51,9 @@ async function resolveStaffBin(): Promise<string> {
   }
 
   // Check well-known paths first (faster than `which`)
+  const binName = isWindows() ? 'staff.exe' : 'staff'
   for (const dir of EXTRA_PATHS) {
-    const candidate = join(dir, 'staff')
+    const candidate = join(dir, binName)
     try {
       await access(candidate)
       return candidate
@@ -50,11 +63,12 @@ async function resolveStaffBin(): Promise<string> {
   }
 
   try {
-    const { stdout } = await execAsync('which staff', { timeout: 5000 })
-    const resolved = stdout.trim()
+    const whichCmd = isWindows() ? 'where staff' : 'which staff'
+    const { stdout } = await execAsync(whichCmd, { timeout: 5000 })
+    const resolved = stdout.trim().split('\n')[0]?.trim()
     if (resolved) return resolved
   } catch {
-    // which failed — fall through
+    // which/where failed — fall through
   }
 
   return 'staff'
@@ -72,8 +86,17 @@ async function detectLocalNetwork(): Promise<void> {
   }
 
   try {
-    const { stdout } = await execAsync('ipconfig getifaddr en0', { timeout: 5000 })
-    const ip = stdout.trim()
+    let ip = ''
+    if (isWindows()) {
+      const { stdout } = await execAsync(
+        'powershell.exe -NoProfile -Command "(Get-NetIPAddress -AddressFamily IPv4 | Where-Object {$_.IPAddress -notlike \'127.*\' -and $_.PrefixOrigin -ne \'WellKnown\'} | Select-Object -First 1).IPAddress"',
+        { timeout: 5000 }
+      )
+      ip = stdout.trim()
+    } else {
+      const { stdout } = await execAsync('ipconfig getifaddr en0', { timeout: 5000 })
+      ip = stdout.trim()
+    }
     if (ip) {
       // Convert e.g. 10.55.0.225 to 10.55.0.0/24
       const parts = ip.split('.')
@@ -288,7 +311,11 @@ export async function runSecurityScan(command: string): Promise<SecurityScanResu
     const { stdout, stderr } = await execAsync(fullCommand, {
       timeout: SCAN_TIMEOUT_MS,
       env: {
-        ...process.env
+        ...process.env,
+        COLUMNS: '120',
+        NO_COLOR: '1',
+        PYTHONIOENCODING: 'utf-8',
+        TERM: 'dumb'
       }
     })
 
