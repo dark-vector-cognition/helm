@@ -4,6 +4,10 @@ const { mockExecFile, mockExec } = vi.hoisted(() => ({ mockExecFile: vi.fn(), mo
 
 vi.mock('child_process', () => ({ execFile: mockExecFile, exec: mockExec }))
 vi.mock('../platform', () => ({ isWindows: () => true }))
+vi.mock('../git-binary', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../git-binary')>()),
+  requireGit: async () => 'C:\\Program Files\\Git\\cmd\\git.exe'
+}))
 
 import {
   POWERSHELL_ENV_PREFIX,
@@ -138,7 +142,7 @@ describe('commit history runs git with an argument array', () => {
     await getRepoCommitHistory("/home/o'brien/repo", 7)
 
     const call = mockExecFile.mock.calls[0]
-    expect(call[0]).toBe('git')
+    expect(call[0]).toBe('C:\\Program Files\\Git\\cmd\\git.exe')
     expect(call[1].slice(0, 1)).toEqual(['log'])
     expect(call[1].slice(-2)).toEqual(['-n', '7'])
     expect(call[2].cwd).toBe("/home/o'brien/repo")

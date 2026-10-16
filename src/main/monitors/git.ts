@@ -1,13 +1,9 @@
-import { exec } from 'child_process'
-import { promisify } from 'util'
 import { existsSync } from 'fs'
 import { join } from 'path'
 import { isWindows } from '../platform'
-import { POWERSHELL_FIND_GIT_SCRIPT, runFile, runPowerShell } from './shell-run'
+import { POWERSHELL_FIND_GIT_SCRIPT, runFile, runGit, runPowerShell } from './shell-run'
 import type { GitRepoInfo, GitCommit, GitActionResult } from '../../shared/types'
 import { getAppRoot, loadEnvironment, resolvePathSetting } from '../app-paths'
-
-const execAsync = promisify(exec)
 
 function getDefaultScanDirs(): string[] {
   const repoRoot = getAppRoot()
@@ -62,9 +58,9 @@ async function getRepoInfo(repoPath: string): Promise<GitRepoInfo | null> {
   try {
     const opts = { cwd: repoPath }
     const [branchResult, statusResult, aheadBehindResult] = await Promise.all([
-      execAsync('git rev-parse --abbrev-ref HEAD', opts),
-      execAsync('git status --porcelain', opts),
-      execAsync('git status --branch --porcelain', opts)
+      runGit(['rev-parse', '--abbrev-ref', 'HEAD'], opts),
+      runGit(['status', '--porcelain'], opts),
+      runGit(['status', '--branch', '--porcelain'], opts)
     ])
 
     const branch = branchResult.stdout.trim()
@@ -220,8 +216,9 @@ export function isValidCommitLimit(limit: unknown): limit is number {
 }
 
 /**
- * Recent commits of one repo. An invalid limit returns no commits and runs nothing. git runs
- * with an argument array and no shell, so neither the limit nor the path is ever parsed as a command.
+ * Recent commits of one repo. An invalid limit returns no commits and runs nothing. git runs by its
+ * absolute path with an argument array and no shell, so neither the limit nor the repo is ever
+ * parsed as a command. No commits come back when git is not on PATH.
  */
 export async function getRepoCommitHistory(
   repoPath: string,
@@ -230,8 +227,7 @@ export async function getRepoCommitHistory(
   if (!isValidCommitLimit(limit)) return []
   try {
     const repoName = repoPath.split(/[/\\]/).pop() || repoPath
-    const stdout = await runFile(
-      'git',
+    const { stdout } = await runGit(
       ['log', '--pretty=format:%H|%an|%ae|%at|%s|%b§§§', '-n', String(limit)],
       { cwd: repoPath }
     )
@@ -245,14 +241,14 @@ const SAFE_GIT_ACTIONS = ['pull', 'push', 'stash', 'stash pop', 'fetch'] as cons
 
 /**
  * Execute a safe git action on a repo.
- * Only whitelisted commands are allowed - no arbitrary shell execution.
+ * Only whitelisted commands are allowed, and git runs by its absolute path with no shell.
  */
 export async function runGitAction(repoPath: string, action: string): Promise<GitActionResult> {
   if (!SAFE_GIT_ACTIONS.includes(action as (typeof SAFE_GIT_ACTIONS)[number])) {
     return { success: false, output: `Unknown action: ${action}` }
   }
   try {
-    const { stdout, stderr } = await execAsync(`git ${action}`, {
+    const { stdout, stderr } = await runGit(action.split(' '), {
       cwd: repoPath,
       timeout: 30000
     })
