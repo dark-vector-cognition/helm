@@ -154,8 +154,61 @@ export function loadConfig(): HelmConfig {
   return applyEnvOverrides(config)
 }
 
-export function saveConfig(config: HelmConfig): void {
+/** The config file as stored on disk, without env overrides or defaults. Empty when missing or unreadable. */
+function readStoredConfig(): Partial<HelmConfig> {
+  try {
+    const configPath = getConfigPath()
+    if (!existsSync(configPath)) return {}
+    const parsed = JSON.parse(readFileSync(configPath, 'utf-8'))
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+function cleanApiKey(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function writeConfigFile(config: Partial<HelmConfig>): void {
   ensureConfigDir()
-  const configPath = getConfigPath()
-  writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8')
+  writeFileSync(getConfigPath(), JSON.stringify(config, null, 2), 'utf-8')
+}
+
+/**
+ * The config as the renderer may see it. The raw API key never leaves the main process:
+ * `apiKey` is always an empty string, and `hasApiKey` says whether a key is in effect
+ * (stored in the config file or set as LLM_API_KEY).
+ */
+export function getRedactedConfig(): HelmConfig {
+  const config = loadConfig()
+  const hasApiKey = Boolean(cleanApiKey(config.apiKey) || process.env.LLM_API_KEY?.trim())
+  return { ...config, apiKey: '', hasApiKey }
+}
+
+/**
+ * Save the full config. The stored API key is kept when the incoming `apiKey` is empty or
+ * missing, so a renderer that round-trips the redacted config cannot erase it. It is replaced
+ * only by a new non-empty key. Use clearStoredApiKey to remove it.
+ */
+export function saveConfig(config: HelmConfig): void {
+  // hasApiKey is derived for the renderer and is never written to disk.
+  const { hasApiKey: _hasApiKey, ...rest } = config
+  const next: Partial<HelmConfig> = { ...rest }
+
+  const incoming = cleanApiKey(config.apiKey)
+  const stored = cleanApiKey(readStoredConfig().apiKey)
+  const key = incoming || stored
+  if (key) next.apiKey = key
+  else delete next.apiKey
+
+  writeConfigFile(next)
+}
+
+/** Explicit clear: removes the stored API key. An LLM_API_KEY set in the environment is unaffected. */
+export function clearStoredApiKey(): void {
+  const stored = readStoredConfig()
+  if (!('apiKey' in stored)) return
+  delete stored.apiKey
+  writeConfigFile(stored)
 }

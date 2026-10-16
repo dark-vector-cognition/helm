@@ -33,7 +33,7 @@ import {
   clearLogLines
 } from './db/queries'
 import { IPC_CHANNELS } from '../shared/types'
-import { loadConfig, saveConfig } from './config'
+import { clearStoredApiKey, getRedactedConfig, loadConfig, saveConfig } from './config'
 import { getAgentRegistry, getAgentById, updateAgentEntry, getTopAgents } from './registry'
 import { getRadioRelayUrl, stopRadioRelayServer } from './radio-relay'
 import { getSkillFeed } from './skills'
@@ -251,8 +251,9 @@ app.whenReady().then(() => {
   )
 
   // Config IPC handler
-  ipcMain.handle(IPC_CHANNELS.CONFIG_GET, () => loadConfig())
+  ipcMain.handle(IPC_CHANNELS.CONFIG_GET, () => getRedactedConfig())
   ipcMain.handle(IPC_CHANNELS.CONFIG_SAVE, (_event, config: HelmConfig) => saveConfig(config))
+  ipcMain.handle(IPC_CHANNELS.CONFIG_CLEAR_API_KEY, () => clearStoredApiKey())
 
   const getVaultClient = (): VaultClient => {
     const currentConfig = loadConfig()

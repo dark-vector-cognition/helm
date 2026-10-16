@@ -294,3 +294,158 @@ describe('loadConfig env overrides', () => {
     })
   })
 })
+
+describe('API key handling across IPC', () => {
+  let tmpHome: string
+  const ENV_KEYS = ['HOME', 'HELM_ENV_PATH', 'LM_STUDIO_URL', 'LLM_API_KEY'] as const
+  const originalEnv = Object.fromEntries(
+    ENV_KEYS.map((key) => [key, process.env[key]])
+  ) as Record<(typeof ENV_KEYS)[number], string | undefined>
+  const STORED_KEY = 'stored-secret-key-123'
+
+  const configFile = (): string => join(tmpHome, '.config', 'helm', 'config.json')
+  const writeStored = (data: Record<string, unknown>): void => {
+    mkdirSync(join(tmpHome, '.config', 'helm'), { recursive: true })
+    writeFileSync(configFile(), JSON.stringify(data, null, 2), 'utf-8')
+  }
+  const readStored = (): Record<string, unknown> => JSON.parse(readFileSync(configFile(), 'utf-8'))
+
+  beforeEach(() => {
+    vi.resetModules()
+    tmpHome = mkdtempSync(join(tmpdir(), 'helm-config-key-'))
+    process.env.HOME = tmpHome
+    process.env.HELM_ENV_PATH = join(tmpHome, 'missing.env')
+    delete process.env.LM_STUDIO_URL
+    delete process.env.LLM_API_KEY
+  })
+
+  afterEach(() => {
+    vi.resetModules()
+    for (const key of ENV_KEYS) {
+      if (originalEnv[key] === undefined) delete process.env[key]
+      else process.env[key] = originalEnv[key]
+    }
+    rmSync(tmpHome, { recursive: true, force: true })
+  })
+
+  it('getRedactedConfig never returns the stored key and reports that one exists', async () => {
+    writeStored({ lmStudioUrl: 'https://api.example.com/v1', apiKey: STORED_KEY })
+    const { getRedactedConfig, loadConfig } = await import('./config')
+
+    const redacted = getRedactedConfig()
+
+    expect(redacted.apiKey).toBe('')
+    expect(redacted.hasApiKey).toBe(true)
+    expect(redacted.lmStudioUrl).toBe('https://api.example.com/v1')
+    expect(JSON.stringify(redacted)).not.toContain(STORED_KEY)
+    // The main process still sees the raw key for outgoing requests.
+    expect(loadConfig().apiKey).toBe(STORED_KEY)
+  })
+
+  it('getRedactedConfig never returns an environment key either', async () => {
+    process.env.LLM_API_KEY = 'env-secret-key-456'
+    const { getRedactedConfig } = await import('./config')
+
+    const redacted = getRedactedConfig()
+
+    expect(redacted.apiKey).toBe('')
+    expect(redacted.hasApiKey).toBe(true)
+    expect(JSON.stringify(redacted)).not.toContain('env-secret-key-456')
+  })
+
+  it('reports no key and an empty string when none is set', async () => {
+    const { getRedactedConfig } = await import('./config')
+
+    const redacted = getRedactedConfig()
+
+    expect(redacted.apiKey).toBe('')
+    expect(redacted.hasApiKey).toBe(false)
+  })
+
+  it('keeps the stored key when the renderer round-trips the redacted config', async () => {
+    writeStored({ lmStudioUrl: 'https://api.example.com/v1', apiKey: STORED_KEY })
+    const { getRedactedConfig, saveConfig } = await import('./config')
+
+    // Same shape as the radio panel: read the config, change one field, save the whole thing.
+    const current = getRedactedConfig()
+    saveConfig({ ...current, radioHomeLocation: { label: 'Base', latitude: 1, longitude: 2 } })
+
+    const stored = readStored()
+    expect(stored.apiKey).toBe(STORED_KEY)
+    expect(stored.radioHomeLocation).toEqual({ label: 'Base', latitude: 1, longitude: 2 })
+    expect(stored).not.toHaveProperty('hasApiKey')
+  })
+
+  it('keeps the stored key when the incoming key is empty, blank or missing', async () => {
+    writeStored({ apiKey: STORED_KEY })
+    const { getRedactedConfig, saveConfig } = await import('./config')
+    const base = getRedactedConfig()
+
+    saveConfig({ ...base, apiKey: '' })
+    expect(readStored().apiKey).toBe(STORED_KEY)
+
+    saveConfig({ ...base, apiKey: '   ' })
+    expect(readStored().apiKey).toBe(STORED_KEY)
+
+    const { apiKey: _omitted, ...withoutKey } = base
+    saveConfig(withoutKey)
+    expect(readStored().apiKey).toBe(STORED_KEY)
+  })
+
+  it('replaces the stored key only when a new non-empty key is sent', async () => {
+    writeStored({ apiKey: STORED_KEY })
+    const { getRedactedConfig, saveConfig, loadConfig } = await import('./config')
+
+    saveConfig({ ...getRedactedConfig(), apiKey: '  new-key-789  ' })
+
+    expect(readStored().apiKey).toBe('new-key-789')
+    expect(loadConfig().apiKey).toBe('new-key-789')
+    expect(JSON.stringify(getRedactedConfig())).not.toContain('new-key-789')
+  })
+
+  it('stores a first key when none was stored', async () => {
+    const { getRedactedConfig, saveConfig } = await import('./config')
+
+    saveConfig({ ...getRedactedConfig(), apiKey: 'first-key' })
+
+    expect(readStored().apiKey).toBe('first-key')
+    expect(getRedactedConfig().hasApiKey).toBe(true)
+  })
+
+  it('clearStoredApiKey removes the key, and later saves do not bring it back', async () => {
+    writeStored({ lmStudioUrl: 'https://api.example.com/v1', apiKey: STORED_KEY })
+    const { getRedactedConfig, saveConfig, clearStoredApiKey, loadConfig } = await import('./config')
+
+    clearStoredApiKey()
+
+    const stored = readStored()
+    expect(stored).not.toHaveProperty('apiKey')
+    expect(stored.lmStudioUrl).toBe('https://api.example.com/v1')
+    expect(loadConfig().apiKey).toBeUndefined()
+    expect(getRedactedConfig().hasApiKey).toBe(false)
+
+    saveConfig({ ...getRedactedConfig(), monitorInterval: 5000 })
+    expect(readStored()).not.toHaveProperty('apiKey')
+    expect(readStored().monitorInterval).toBe(5000)
+  })
+
+  it('clearStoredApiKey does nothing when no config file exists', async () => {
+    const { clearStoredApiKey } = await import('./config')
+
+    expect(() => clearStoredApiKey()).not.toThrow()
+    expect(existsSync(configFile())).toBe(false)
+  })
+
+  it('never writes an environment key to the config file', async () => {
+    process.env.LLM_API_KEY = 'env-secret-key-456'
+    const { getRedactedConfig, saveConfig, clearStoredApiKey } = await import('./config')
+
+    saveConfig(getRedactedConfig())
+    expect(readFileSync(configFile(), 'utf-8')).not.toContain('env-secret-key-456')
+    expect(readStored()).not.toHaveProperty('apiKey')
+
+    // Clearing the stored key does not touch the environment key.
+    clearStoredApiKey()
+    expect(getRedactedConfig().hasApiKey).toBe(true)
+  })
+})

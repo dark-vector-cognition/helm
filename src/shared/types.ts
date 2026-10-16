@@ -419,6 +419,7 @@ export const IPC_CHANNELS = {
   DB_CLEAR_LOGS: 'db:clear-logs',
   CONFIG_GET: 'config:get',
   CONFIG_SAVE: 'config:save',
+  CONFIG_CLEAR_API_KEY: 'config:clear-api-key',
   GIT_COMMIT_HISTORY: 'git:commit-history',
   DB_QUERY_POSTURE_HISTORY: 'db:query-posture-history',
   GIT_ACTION: 'git:action',
@@ -606,8 +607,14 @@ export interface VaultReindexResult {
 }
 
 export interface HelmConfig {
-  /** Optional API key for hosted OpenAI-compatible endpoints. LLM_API_KEY in the environment overrides it. */
+  /**
+   * Optional API key for hosted OpenAI-compatible endpoints. LLM_API_KEY in the environment
+   * overrides it. The raw key never crosses IPC: the renderer always receives an empty string
+   * here, and a save with an empty value keeps the stored key.
+   */
   apiKey?: string
+  /** Set by the main process on config sent to the renderer: true when a key is in effect. Never saved. */
+  hasApiKey?: boolean
   gitRepoPaths: string[]
   monitorInterval: number
   snapshotInterval: number
