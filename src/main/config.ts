@@ -166,6 +166,26 @@ function cleanApiKey(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
 }
 
+/**
+ * Reduce an endpoint URL to what identifies the host: no trailing slash, no /v1, no query or
+ * hash, and a lower-case scheme and host. Two spellings of the same endpoint compare equal.
+ */
+function normalizeEndpoint(raw: unknown): string {
+  const trimmed = typeof raw === 'string' ? raw.trim() : ''
+  if (!trimmed) return ''
+  try {
+    const url = new URL(trimmed)
+    url.hash = ''
+    url.search = ''
+    let pathname = url.pathname.replace(/\/+$/, '')
+    if (pathname.endsWith('/v1')) pathname = pathname.slice(0, -3)
+    url.pathname = pathname || ''
+    return url.toString().replace(/\/$/, '')
+  } catch {
+    return trimmed.toLowerCase()
+  }
+}
+
 function writeConfigFile(config: Partial<HelmConfig>): void {
   ensureConfigDir()
   writeFileSync(getConfigPath(), JSON.stringify(config, null, 2), 'utf-8')
@@ -186,15 +206,28 @@ export function getRedactedConfig(): HelmConfig {
  * Save the full config. The stored API key is kept when the incoming `apiKey` is empty or
  * missing, so a renderer that round-trips the redacted config cannot erase it. It is replaced
  * only by a new non-empty key. Use clearStoredApiKey to remove it.
+ *
+ * A key belongs to the endpoint it was saved for. When a save changes `lmStudioUrl` and carries
+ * no new key, the stored key is dropped, so it can never be sent to a different host. An
+ * unchanged URL means equal to the stored one or to the one in effect now (the value the
+ * renderer was shown, which includes an LM_STUDIO_URL override), ignoring a trailing slash or /v1.
  */
 export function saveConfig(config: HelmConfig): void {
   // hasApiKey is derived for the renderer and is never written to disk.
   const { hasApiKey: _hasApiKey, ...rest } = config
   const next: Partial<HelmConfig> = { ...rest }
 
-  const incoming = cleanApiKey(config.apiKey)
-  const stored = cleanApiKey(readStoredConfig().apiKey)
-  const key = incoming || stored
+  const stored = readStoredConfig()
+  const incomingKey = cleanApiKey(config.apiKey)
+  const storedKey = cleanApiKey(stored.apiKey)
+
+  const incomingUrl = normalizeEndpoint(config.lmStudioUrl)
+  const urlChanged =
+    incomingUrl !== normalizeEndpoint(stored.lmStudioUrl) &&
+    incomingUrl !== normalizeEndpoint(loadConfig().lmStudioUrl)
+
+  const isNewKey = incomingKey !== '' && incomingKey !== storedKey
+  const key = isNewKey ? incomingKey : urlChanged ? '' : storedKey
   if (key) next.apiKey = key
   else delete next.apiKey
 

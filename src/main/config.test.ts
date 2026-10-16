@@ -447,3 +447,119 @@ describe('API key handling across IPC', () => {
     expect(getRedactedConfig().hasApiKey).toBe(true)
   })
 })
+
+describe('API key is bound to its endpoint', () => {
+  let tmpHome: string
+  const ENV_KEYS = ['HOME', 'HELM_ENV_PATH', 'LM_STUDIO_URL', 'LLM_API_KEY'] as const
+  const originalEnv = Object.fromEntries(
+    ENV_KEYS.map((key) => [key, process.env[key]])
+  ) as Record<(typeof ENV_KEYS)[number], string | undefined>
+  const HOST_A = 'https://api.example.com/v1'
+  const HOST_B = 'https://other.example.net/v1'
+
+  const configFile = (): string => join(tmpHome, '.config', 'helm', 'config.json')
+  const writeStored = (data: Record<string, unknown>): void => {
+    mkdirSync(join(tmpHome, '.config', 'helm'), { recursive: true })
+    writeFileSync(configFile(), JSON.stringify(data, null, 2), 'utf-8')
+  }
+  const readStored = (): Record<string, unknown> => JSON.parse(readFileSync(configFile(), 'utf-8'))
+
+  beforeEach(() => {
+    vi.resetModules()
+    tmpHome = mkdtempSync(join(tmpdir(), 'helm-config-bind-'))
+    process.env.HOME = tmpHome
+    process.env.HELM_ENV_PATH = join(tmpHome, 'missing.env')
+    delete process.env.LM_STUDIO_URL
+    delete process.env.LLM_API_KEY
+  })
+
+  afterEach(() => {
+    vi.resetModules()
+    for (const key of ENV_KEYS) {
+      if (originalEnv[key] === undefined) delete process.env[key]
+      else process.env[key] = originalEnv[key]
+    }
+    rmSync(tmpHome, { recursive: true, force: true })
+  })
+
+  it('drops the stored key when a save changes the URL and carries no new key', async () => {
+    writeStored({ lmStudioUrl: HOST_A, apiKey: 'key-for-a' })
+    const { getRedactedConfig, saveConfig } = await import('./config')
+
+    saveConfig({ ...getRedactedConfig(), lmStudioUrl: HOST_B })
+
+    const stored = readStored()
+    expect(stored.lmStudioUrl).toBe(HOST_B)
+    expect(stored).not.toHaveProperty('apiKey')
+    expect(JSON.stringify(stored)).not.toContain('key-for-a')
+  })
+
+  it('drops the key for blank and missing keys alike, and when the URL is cleared', async () => {
+    const { getRedactedConfig, saveConfig } = await import('./config')
+
+    writeStored({ lmStudioUrl: HOST_A, apiKey: 'key-for-a' })
+    saveConfig({ ...getRedactedConfig(), lmStudioUrl: HOST_B, apiKey: '   ' })
+    expect(readStored()).not.toHaveProperty('apiKey')
+
+    writeStored({ lmStudioUrl: HOST_A, apiKey: 'key-for-a' })
+    const { apiKey: _omitted, ...withoutKey } = getRedactedConfig()
+    saveConfig({ ...withoutKey, lmStudioUrl: HOST_B })
+    expect(readStored()).not.toHaveProperty('apiKey')
+
+    writeStored({ lmStudioUrl: HOST_A, apiKey: 'key-for-a' })
+    saveConfig({ ...getRedactedConfig(), lmStudioUrl: undefined })
+    expect(readStored()).not.toHaveProperty('apiKey')
+  })
+
+  it('keeps a new key that arrives together with the new URL', async () => {
+    writeStored({ lmStudioUrl: HOST_A, apiKey: 'key-for-a' })
+    const { getRedactedConfig, saveConfig } = await import('./config')
+
+    saveConfig({ ...getRedactedConfig(), lmStudioUrl: HOST_B, apiKey: 'key-for-b' })
+
+    expect(readStored()).toMatchObject({ lmStudioUrl: HOST_B, apiKey: 'key-for-b' })
+  })
+
+  it('drops the old key when main-process code resends it with a different URL', async () => {
+    writeStored({ lmStudioUrl: HOST_A, apiKey: 'key-for-a' })
+    const { loadConfig, saveConfig } = await import('./config')
+
+    // Same shape as the endpoint auto-repair: the raw config with a new URL.
+    saveConfig({ ...loadConfig(), lmStudioUrl: HOST_B })
+
+    expect(readStored()).not.toHaveProperty('apiKey')
+  })
+
+  it('keeps the key when the URL is unchanged, however it is spelled', async () => {
+    writeStored({ lmStudioUrl: HOST_A, apiKey: 'key-for-a' })
+    const { getRedactedConfig, saveConfig } = await import('./config')
+
+    for (const spelling of [HOST_A, 'https://api.example.com', 'https://API.example.com/v1/', ' https://api.example.com/v1 ']) {
+      saveConfig({ ...getRedactedConfig(), lmStudioUrl: spelling, monitorInterval: 4000 })
+      expect(readStored().apiKey).toBe('key-for-a')
+    }
+  })
+
+  it('keeps the key on an unrelated save when the URL comes from LM_STUDIO_URL', async () => {
+    // The key is in the config file and the URL is in .env. The renderer is shown the .env URL
+    // and sends it back on every full-config save, which must not erase the key.
+    writeStored({ apiKey: 'key-for-a' })
+    process.env.LM_STUDIO_URL = HOST_A
+    const { getRedactedConfig, saveConfig } = await import('./config')
+
+    saveConfig({ ...getRedactedConfig(), monitorInterval: 4000 })
+
+    expect(readStored().apiKey).toBe('key-for-a')
+  })
+
+  it('does not touch a key set only through the environment', async () => {
+    writeStored({ lmStudioUrl: HOST_A })
+    process.env.LLM_API_KEY = 'env-key'
+    const { getRedactedConfig, saveConfig } = await import('./config')
+
+    saveConfig({ ...getRedactedConfig(), lmStudioUrl: HOST_B })
+
+    expect(readStored()).not.toHaveProperty('apiKey')
+    expect(getRedactedConfig().hasApiKey).toBe(true)
+  })
+})
