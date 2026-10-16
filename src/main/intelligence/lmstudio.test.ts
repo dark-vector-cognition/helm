@@ -159,7 +159,7 @@ describe('healLmStudioConnection', () => {
     expect(isLmStudioConnectivityError('fetch failed')).toBe(true)
     expect(isLmStudioConnectivityError('connect ECONNREFUSED 127.0.0.1:1234')).toBe(true)
     expect(
-      parseArpNeighborIps('? (10.55.0.10) at cc:ba:bd:fc:81:19 on en8 ifscope [ethernet]\n? (8.8.8.8) at aa:bb:cc:dd:ee:ff on en8 ifscope [ethernet]')
+      parseArpNeighborIps('? (10.55.0.10) at aa:bb:cc:dd:ee:ff on en8 ifscope [ethernet]\n? (8.8.8.8) at aa:bb:cc:dd:ee:ff on en8 ifscope [ethernet]')
     ).toEqual(['10.55.0.10'])
   })
 })
