@@ -154,7 +154,7 @@ async function handleRemoteRelay(
   if (req.headers.range) {
     upstreamHeaders.set('Range', req.headers.range)
   }
-  upstreamHeaders.set('User-Agent', 'HydraRadioRelay/1.0')
+  upstreamHeaders.set('User-Agent', 'HelmRadioRelay/1.0')
 
   const abortController = new AbortController()
   req.on('close', () => abortController.abort())

@@ -71,7 +71,7 @@ function getRepoAdvice(repo: GitRepoInfo): string {
     return `Local branch is ${repo.ahead} commit${repo.ahead === 1 ? '' : 's'} ahead. Push when you want your work to stop living only on this machine.`
   }
   if (repo.status === 'error') {
-    return 'Hydra could not read this repo cleanly. This one needs a manual eyeball.'
+    return 'HELM could not read this repo cleanly. This one needs a manual eyeball.'
   }
   return 'No immediate git mess detected. This repo is behaving itself.'
 }
@@ -193,7 +193,7 @@ export function GitStatusPanel(): JSX.Element {
 
       {visibleRepos.length === 0 && (
         <div className="text-xs text-gray-600 px-1">
-          Nothing matches this filter. Hydra finally found a quiet corner.
+          Nothing matches this filter. HELM finally found a quiet corner.
         </div>
       )}
     </div>

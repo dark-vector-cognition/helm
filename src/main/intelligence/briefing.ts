@@ -165,7 +165,7 @@ export async function generateBriefing(state: SystemState): Promise<BriefingResu
         ...result.alerts
       ]
       result.suggestions = [
-        `Hydra switched from ${connection.previousUrl} to ${connection.url}.`,
+        `HELM switched from ${connection.previousUrl} to ${connection.url}.`,
         ...result.suggestions
       ]
     }
