@@ -142,11 +142,7 @@ export function CommandCenterPanel({
               active={sortMode === 'health'}
               onClick={() => setSortMode('health')}
             />
-            <SortChip
-              label="CPU"
-              active={sortMode === 'cpu'}
-              onClick={() => setSortMode('cpu')}
-            />
+            <SortChip label="CPU" active={sortMode === 'cpu'} onClick={() => setSortMode('cpu')} />
             <SortChip
               label="Memory"
               active={sortMode === 'memory'}
@@ -154,7 +150,9 @@ export function CommandCenterPanel({
             />
           </div>
           <div className="text-[10px] text-gray-600 whitespace-nowrap">
-            CPU is per-core: 144% = 1.44 cores
+            {typeof navigator !== 'undefined' && /Win/.test(navigator.platform)
+              ? 'CPU is a share of total machine capacity'
+              : 'CPU is per-core: 144% = 1.44 cores'}
           </div>
         </div>
       )}
@@ -384,7 +382,9 @@ function CommandRow({
                   : 'bg-red-950/60 text-red-400 border-red-800/40 hover:bg-red-900/60'
               }`}
               title={
-                confirming ? 'Click again to confirm' : `Kill all ${group.processes.length} processes`
+                confirming
+                  ? 'Click again to confirm'
+                  : `Kill all ${group.processes.length} processes`
               }
             >
               {confirming ? 'Sure?' : 'Kill'}

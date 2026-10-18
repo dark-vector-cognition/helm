@@ -3,8 +3,8 @@
 export interface ProcessInfo {
   pid: number
   user: string
-  cpu: number
-  mem: number
+  cpu: number // Percent CPU; Windows uses total logical-processor capacity.
+  mem: number // Resident working set as percent of physical RAM.
   command: string
   name: string
   cwd?: string

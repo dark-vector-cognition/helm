@@ -4,6 +4,7 @@ import type { HiveSessionInfo, HiveSpawnRequest, HiveSpawnResult } from '../../.
 interface HiveStore {
   sessions: HiveSessionInfo[]
   enabled: boolean
+  disabledReason: string | null
   loading: boolean
   error: string | null
   initialize: () => () => void
@@ -55,6 +56,7 @@ export const useHiveStore = create<HiveStore>((set, get) => {
   return {
     sessions: [],
     enabled: false,
+    disabledReason: null,
     loading: false,
     error: null,
     initialize: () => {
@@ -86,6 +88,7 @@ export const useHiveStore = create<HiveStore>((set, get) => {
         set((current) => ({
           sessions,
           enabled: state.enabled,
+          disabledReason: state.reason ?? null,
           error: current.error?.startsWith('Could not refresh agent runs:') ? null : current.error
         }))
       } catch (err) {

@@ -84,7 +84,12 @@ export function setupHiveIPC(mainWindow: BrowserWindow, hiveConfig: HiveConfig):
   try {
     managed ??= new ManagedHive(join(app.getPath('userData'), 'hive-runs'), join(__dirname, 'hive-worker.js'), () => notifyManaged(), hiveConfig.claudeBinPath)
   } catch (error) { managedError = error instanceof Error ? error.message : 'Run journal unavailable.' }
-  ipcMain.handle(IPC_CHANNELS.HIVE_LAUNCH_STATE, () => ({ enabled: hiveConfig.enabled }))
+  ipcMain.handle(IPC_CHANNELS.HIVE_LAUNCH_STATE, () => ({
+    enabled: hiveConfig.enabled && process.platform !== 'win32',
+    reason: process.platform === 'win32'
+      ? 'Managed agent launch is not available on Windows in this build. Monitoring remains available.'
+      : !hiveConfig.enabled ? 'Agent launch is disabled in this installation. Monitoring remains available.' : undefined
+  }))
   ipcMain.handle(IPC_CHANNELS.HIVE_RETRY, (_event, id: string) => {
     if (!hiveConfig.enabled) return { success: false, error: 'HIVE is disabled' }
     return managed?.retry(id) ?? { success: false, error: managedError }
