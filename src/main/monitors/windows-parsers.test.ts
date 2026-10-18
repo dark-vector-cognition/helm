@@ -81,15 +81,15 @@ describe('windows netstat -ano (ports)', () => {
 describe('windows process list', () => {
   it('parses PowerShell CSV rows, including quoted commas and missing paths', () => {
     const raw = [
-      '"Id","ProcessName","CPU","Mem","Path","User"',
-      '"4120","node","12.5","210.3","C:\\Users\\dev\\projects\\sample-app\\node_modules\\.bin\\vite.exe","DEV\\dev"',
-      '"88","Idle","0","0.0","",""'
+      '"Id","ProcessName","CPU","WorkingSetBytes","Path","User","StartTime","SampleTime"',
+      '"4120","node","12.5","0","C:\\Users\\dev\\projects\\sample-app\\node_modules\\.bin\\vite.exe","DEV\\dev","100","10"',
+      '"88","System","0","0","","","","10"'
     ].join('\r\n')
     const rows = parseWindowsProcessOutput(raw)
     expect(rows).toHaveLength(2)
-    expect(rows[0]).toMatchObject({ pid: 4120, cpu: 12.5, mem: 210.3, name: 'vite.exe' })
+    expect(rows[0]).toMatchObject({ pid: 4120, cpu: 0, mem: 0, name: 'vite.exe' })
     expect(rows[0].cwd).toMatch(/^C:\/.*\/projects\/sample-app$/)
-    expect(rows[1]).toMatchObject({ pid: 88, name: 'Idle' })
+    expect(rows[1]).toMatchObject({ pid: 88, name: 'System' })
     expect(rows[1].cwd).toBeUndefined()
   })
 
