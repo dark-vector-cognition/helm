@@ -285,7 +285,7 @@ function AgentRow({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 min-w-0">
           <span className={`${TYPE_COLORS[agent.type]} text-xs shrink-0`}>{TYPE_ICONS[agent.type]}</span>
-          <span className="truncate font-medium text-white">{agent.name}</span>
+          <span className="truncate font-medium text-white" title={agent.name}>{agent.name}</span>
           {agent.hiveSessionId && (
             <span className="shrink-0 rounded-full bg-amber-950/50 border border-amber-700/40 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-amber-400">
               HIVE {agent.hiveRole ?? ''}
@@ -322,7 +322,7 @@ function AgentRow({
         )}
       </div>
 
-      <div className="w-28 shrink-0 text-right">
+      <div className="w-28 shrink-0 pl-2 text-right">
         <span className="inline-block max-w-full truncate font-mono text-xs text-gray-500" title={handleLabel}>
           {handleLabel}
         </span>
