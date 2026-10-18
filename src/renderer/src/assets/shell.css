@@ -114,6 +114,21 @@ body {
 }
 
 /* ── Nav sidebar (surface tier) ── */
+.shell-enterprise {
+  flex-shrink: 0;
+  margin: auto 0.5rem 0;
+  padding: 0.85rem 0.45rem 0.45rem;
+  border-top: 1px solid var(--helm-border-soft);
+  color: var(--helm-shell-muted);
+  font-size: 0.7rem;
+  line-height: 1.55;
+}
+
+.shell-enterprise-label { font-weight: 600; color: var(--helm-shell-text); }
+.shell-enterprise a { display: inline-block; color: var(--helm-accent); }
+.shell-enterprise a:hover { text-decoration: underline; }
+.shell-enterprise a:focus-visible { outline: 2px solid var(--helm-accent); outline-offset: 3px; }
+
 .shell-nav {
   width: var(--helm-nav-width);
   border: 1px solid var(--helm-border-strong);

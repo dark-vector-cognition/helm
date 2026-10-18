@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react'
 import { useSystemStore } from '../stores/system'
+import { usePrivacyStore } from '../stores/privacy'
 import type { GitRepoInfo, GitActionResult } from '../../../shared/types'
 
 const STATUS_STYLES: Record<GitRepoInfo['status'], { color: string; label: string; border: string }> = {
@@ -224,6 +225,7 @@ function FilterChip({
 }
 
 function RepoRow({ repo }: { repo: GitRepoInfo }): JSX.Element {
+  const privacyMode = usePrivacyStore((s) => s.privacyMode)
   const style = STATUS_STYLES[repo.status]
   const actions = actionsForStatus(repo)
   const [runningAction, setRunningAction] = useState<string | null>(null)
@@ -269,8 +271,8 @@ function RepoRow({ repo }: { repo: GitRepoInfo }): JSX.Element {
             <span className={`text-[10px] uppercase tracking-[0.18em] ${style.color}`}>{style.label}</span>
           </div>
           <div className="pt-1 text-xs text-gray-400">{getRepoAdvice(repo)}</div>
-          <div className="pt-1 text-[11px] text-gray-600 font-mono truncate" title={repo.path}>
-            {repo.path}
+          <div className="pt-1 text-[11px] text-gray-600 font-mono truncate" title={privacyMode ? undefined : repo.path}>
+            {privacyMode ? 'Private workspace' : repo.path}
           </div>
         </div>
 

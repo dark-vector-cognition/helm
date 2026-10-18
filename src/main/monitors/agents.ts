@@ -34,6 +34,8 @@ const AGENT_PATTERNS: AgentPattern[] = [
       const name = proc.name.toLowerCase()
       return (
         (name === 'codex' || /(^|\s)codex(\s|$)/i.test(proc.command)) &&
+        !lower.includes('codex (service).app/') &&
+        !lower.includes('/chatgpt.app/') &&
         !lower.includes('/applications/codex.app/') &&
         !lower.includes('/contents/resources/codex app-server') &&
         !lower.includes('codex helper') &&

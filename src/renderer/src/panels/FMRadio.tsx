@@ -246,6 +246,11 @@ export function FMRadioPanel(): JSX.Element {
         ? 'LIVE'
         : '--:--'
 
+  useEffect(() => () => {
+    relayRequestRef.current++
+    didInitialCueRef.current = false
+  }, [])
+
   useEffect(
     () =>
       engine.onStatusChange((nextStatus, nextError) => {
@@ -423,7 +428,15 @@ export function FMRadioPanel(): JSX.Element {
   }
 
   function handleStop(): void {
+    relayRequestRef.current++
     engine.stop(true)
+  }
+
+  function handleRemoveLocalFile(id: string): void {
+    if (stationId === id || engine.getCurrentTrackId() === id) {
+      handleStop()
+    }
+    removeLocalFile(id)
   }
 
   function handleReload(): void {
@@ -811,7 +824,7 @@ export function FMRadioPanel(): JSX.Element {
                   <button
                     type="button"
                     className="winamp-playlist-remove"
-                    onClick={() => removeLocalFile(localFile.id)}
+                    onClick={() => handleRemoveLocalFile(localFile.id)}
                     title="Remove from local library"
                   >
                     ×

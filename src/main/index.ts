@@ -132,6 +132,8 @@ function createWindow(): void {
 
   mainWindow.on('closed', () => {
     mainWindow = null
+    teardownHive()
+    stopSentinel()
     stopMonitoring()
   })
 }
