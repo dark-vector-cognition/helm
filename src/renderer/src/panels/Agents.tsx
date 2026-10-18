@@ -437,8 +437,11 @@ function AgentDetailPanel({
     )
   }
 
-  const displayCommand = displayText(processInfo?.command, privacyMode)
-  const displayWorkingDir = displayText(processInfo?.cwd ?? agent.workingDir, privacyMode)
+  const displayCommand = privacyMode && processInfo?.command
+    ? 'Hidden in Secure View'
+    : displayText(processInfo?.command, privacyMode)
+  const workingDir = processInfo?.cwd ?? agent.workingDir
+  const displayWorkingDir = privacyMode && workingDir ? 'Private workspace' : workingDir
   const displayAction = displayText(agent.currentAction, privacyMode)
 
   return (

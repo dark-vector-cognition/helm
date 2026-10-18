@@ -23,6 +23,7 @@ import { usePrivacyStore } from './stores/privacy'
 import { HeaderTicker } from './components/HeaderTicker'
 import { SkinGlobe } from './components/SkinGlobe'
 import { getAudioElement } from './stores/audio-engine'
+import { EnterpriseNotice } from './components/EnterpriseNotice'
 import type { SystemState, SentinelStatus } from '../../shared/types'
 
 interface PageMeta {
@@ -572,7 +573,7 @@ function NavBadge({
 }: {
   pageId: HelmPageId
   active?: boolean
-}): JSX.Element {
+}): JSX.Element | null {
   const state = useSystemStore((s) => s.state)
   if (!state) return <span className="shell-nav-badge text-[10px]">-</span>
 
@@ -591,19 +592,14 @@ function NavBadge({
       badge = `${state.ports.filter((port) => port.state === 'LISTEN').length}`
       break
     case 'ai':
-      badge = state.memory.usagePercent >= 80 ? 'hot' : 'ready'
-      break
     case 'vault':
-      badge = '1.8k'
-      break
+    case 'logs':
+      return null
     case 'registry':
       badge = '\u{1F3C6}'
       break
     case 'radio':
       badge = 'fm'
-      break
-    case 'logs':
-      badge = `${state.processes.length}`
       break
     default:
       badge = '-'
@@ -634,7 +630,7 @@ function ShellNav({
           </div>
         </div>
         <div className="chrome-ribbed mx-2" />
-        <nav className="pt-2 space-y-1.5 px-1">
+        <nav className="pt-2 space-y-1.5 px-1 flex-1 min-h-0 overflow-y-auto">
           {PAGES.map((page) => {
             const active = page.id === currentPage
             return (
@@ -662,6 +658,7 @@ function ShellNav({
             )
           })}
         </nav>
+        <EnterpriseNotice />
       </aside>
 
       <div className="xl:hidden overflow-x-auto">
@@ -682,6 +679,7 @@ function ShellNav({
             )
           })}
         </div>
+        <EnterpriseNotice />
       </div>
     </>
   )

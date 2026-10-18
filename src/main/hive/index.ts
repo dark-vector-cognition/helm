@@ -74,6 +74,7 @@ export function resolveHiveConfig(userConfig?: Partial<HiveConfig>): HiveConfig 
 
 export function setupHiveIPC(mainWindow: BrowserWindow, hiveConfig: HiveConfig): void {
   ipcMain.handle(IPC_CHANNELS.HIVE_SPAWN, async (_event, request: HiveSpawnRequest) => {
+    if (!hiveConfig.enabled) return { success: false, error: 'HIVE is disabled' }
     return spawnHiveAgent(request, hiveConfig)
   })
 

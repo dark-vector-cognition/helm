@@ -12,6 +12,7 @@ let currentStatus: AudioStatus = 'idle'
 let currentError: string | null = null
 let currentTrackId: string | null = null
 let currentTrackSrc: string | null = null
+let playbackRequest = 0
 const listeners = new Set<StatusListener>()
 
 function mediaErrorMessage(mediaError: MediaError | null): string {
@@ -63,6 +64,7 @@ export function getAudioElement(): HTMLAudioElement {
 export function loadTrack(trackId: string, src: string): void {
   const el = getAudioElement()
   if (currentTrackId === trackId && currentTrackSrc === src) return
+  playbackRequest++
   currentTrackId = trackId
   currentTrackSrc = src
   setStatus('idle')
@@ -73,10 +75,12 @@ export function loadTrack(trackId: string, src: string): void {
 
 export async function play(): Promise<void> {
   const el = getAudioElement()
+  const requestId = ++playbackRequest
   setStatus('loading')
   try {
     await el.play()
   } catch (error) {
+    if (requestId !== playbackRequest) return
     const reason =
       error instanceof DOMException
         ? `${error.name}: ${error.message}`
@@ -88,10 +92,12 @@ export async function play(): Promise<void> {
 }
 
 export function pause(): void {
+  playbackRequest++
   getAudioElement().pause()
 }
 
 export function stop(resetPosition = false): void {
+  playbackRequest++
   const el = getAudioElement()
   el.pause()
   if (resetPosition && Number.isFinite(el.duration)) {
@@ -101,6 +107,7 @@ export function stop(resetPosition = false): void {
 }
 
 export function reload(src: string): void {
+  playbackRequest++
   const el = getAudioElement()
   currentTrackSrc = src
   setStatus('loading')

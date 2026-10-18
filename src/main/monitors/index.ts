@@ -26,6 +26,7 @@ import { getDiskUsage } from './disk'
 import { getBatteryStatus } from './battery'
 import { getCCUsage } from './ccusage'
 import { buildMonitorTickThresholds, resolveMonitorInterval } from './schedule'
+import { getCpuUsage } from './cpu'
 import { showDesktopNotification } from '../notifications'
 import { isLateNight } from '../intelligence/time-context'
 import {
@@ -115,6 +116,7 @@ let snapshotPollCount = 0
 let sessionPollCount = 0
 
 let latestGitRepos: SystemState['gitRepos'] = []
+let previousCpuInfo = cpus()
 
 function refreshMonitorConfig(): void {
   monitorConfig = loadConfig()
@@ -179,6 +181,8 @@ async function collectSystemState(): Promise<SystemState> {
   }
 
   const cpuInfo = cpus()
+  const cpuUsage = getCpuUsage(cpuInfo, previousCpuInfo)
+  previousCpuInfo = cpuInfo
   const totalMemory = totalmem()
 
   const agents = [...processAgents, ...fileAgents]
@@ -194,12 +198,7 @@ async function collectSystemState(): Promise<SystemState> {
     agents,
     gitRepos: latestGitRepos,
     cpu: {
-      usage:
-        cpuInfo.reduce((acc, cpu) => {
-          const total = Object.values(cpu.times).reduce((a, b) => a + b, 0)
-          const idle = cpu.times.idle
-          return acc + ((total - idle) / total) * 100
-        }, 0) / cpuInfo.length,
+      usage: cpuUsage,
       cores: cpuInfo.length
     },
     memory: {
@@ -239,6 +238,7 @@ export function onStateUpdate(callback: (state: SystemState) => void): void {
 }
 
 export function startMonitoring(mainWindow: BrowserWindow, intervalMs?: number): void {
+  previousCpuInfo = cpus()
   refreshMonitorConfig()
   resetTieredPollCounters()
   const loopIntervalMs = intervalMs ?? resolveMonitorInterval(monitorConfig)
@@ -588,6 +588,7 @@ export function startMonitoring(mainWindow: BrowserWindow, intervalMs?: number):
 }
 
 export function stopMonitoring(): void {
+  previousCpuInfo = []
   if (monitorInterval) {
     clearInterval(monitorInterval)
     monitorInterval = null

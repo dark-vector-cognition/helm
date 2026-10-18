@@ -55,12 +55,25 @@ describe('detectAgents', () => {
         user: 'test',
         cpu: 12.9,
         mem: 0.4,
-        command: '/Applications/Codex.app/Contents/Resources/codex app-server --analytics-default-enabled',
+        command:
+          '/Applications/Codex.app/Contents/Resources/codex app-server --analytics-default-enabled',
         name: 'codex'
       }
     ]
     const agents = detectAgents(procs)
     expect(agents).toHaveLength(0)
+  })
+
+  it('does not count desktop GPU or service helpers as Codex CLI agents', () => {
+    const processes = ['--type=gpu-process', '--type=utility', 'app-server'].map((args, i) => ({
+      pid: 1000 + i,
+      user: 'test',
+      cpu: 20,
+      mem: 1,
+      name: 'codex',
+      command: `/Applications/ChatGPT.app/Contents/Frameworks/Codex Framework.framework/Helpers/Codex (Service).app/Contents/MacOS/Codex (Service) ${args}`
+    }))
+    expect(detectAgents(processes)).toEqual([])
   })
 
   it('does not flag non-agent processes', () => {
@@ -191,8 +204,7 @@ describe('detectAgents', () => {
         user: 'test',
         cpu: 12,
         mem: 0.8,
-        command:
-          '/home/test/projects/claude-pet/com.example.claude-pet.sdPlugin/bin/plugin.js',
+        command: '/home/test/projects/claude-pet/com.example.claude-pet.sdPlugin/bin/plugin.js',
         name: 'node'
       }
     ]
@@ -272,7 +284,8 @@ describe('detectAgents', () => {
         user: 'test',
         cpu: 5.7,
         mem: 0.5,
-        command: '/Applications/Codex.app/Contents/Resources/codex app-server --analytics-default-enabled',
+        command:
+          '/Applications/Codex.app/Contents/Resources/codex app-server --analytics-default-enabled',
         name: 'codex'
       },
       {

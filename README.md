@@ -2,7 +2,19 @@
 
 HELM is a desktop ops shell for developers running AI agents, local services, and multi-machine model workflows. It keeps overall system status visible while giving each domain its own page instead of forcing everything into one dense dashboard.
 
-Current version: `5.0.0` (Helm Light, Apache-2.0).
+Current version: `5.0.0`. Helm Light is free and open source under [Apache-2.0](LICENSE).
+
+[Product page, demo and roadmap](https://darkvectorcognition.ai/helm/).
+
+## See HELM in use
+
+[![Watch the HELM review demo](docs/media/helm-demo-poster.jpg)](docs/media/helm-demo-review.mp4)
+
+[Watch the narrated demo (MP4)](docs/media/helm-demo-review.mp4).
+
+The demo and screenshots show a review build based on `5.0.0`, including fixes that have not shipped. Dates in the demo are 2026 roadmap targets, not release promises. See the [roadmap and release status](docs/ROADMAP.md).
+
+Need Helm for your team? [Discuss enterprise with DVC](https://darkvectorcognition.ai/helm/#enterprise).
 
 ## What's new in 5.0
 
@@ -13,7 +25,7 @@ For anyone who cloned an earlier version:
 - **Electron 41.** Electron 35 to 41.10.7, with `better-sqlite3` 12.11.1 and refreshed build tooling. Node.js 22.12 or newer is now required.
 - **Fixes and platform work.** Windows code paths for the port, network, process, battery, disk, and firewall monitors, tighter agent detection, quieter notifications, and a guard so a blank remote vault host can never start an `ssh` call. Details are in the [CHANGELOG](CHANGELOG.md).
 
-Helm Go, the full signed build with auto-update and support, is coming soon.
+Signed distribution, auto-update and support remain future packaging proposals. No delivery date is announced. See the [proposed roadmap](docs/ROADMAP.md).
 
 ## Quick Start (2 minutes)
 
@@ -28,6 +40,26 @@ npm run dev
 ```
 
 Requires Node.js 22.12 or newer. No model is needed to run HELM. If you want AI briefings, point it at any OpenAI-compatible server (see [Optional Model](#optional-model)).
+
+## Screenshots
+
+### Bridge
+
+![HELM Bridge with machine load, warnings and the command center](docs/media/helm-bridge.png)
+
+Machine load, warnings and the command center in one view. This capture has no model configured.
+
+### AI
+
+![HELM AI page in the review build](docs/media/helm-ai.png)
+
+The AI page groups the optional model connection and briefing controls. The demo uses no configured model.
+
+### Fleet
+
+![HELM Fleet with workspace processes and local repository status](docs/media/helm-fleet.png)
+
+Workspace processes beside local repository status. This capture shows the `helm` repository on `main` with uncommitted changes.
 
 ## Navigation (9 Pages, Zero Panel Duplication)
 

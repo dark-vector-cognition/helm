@@ -1,4 +1,5 @@
 import { createReadStream } from 'node:fs'
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import { stat } from 'node:fs/promises'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { Readable } from 'node:stream'
@@ -11,6 +12,11 @@ type RadioRelaySource =
 
 let relayServer: ReturnType<typeof createServer> | null = null
 let relayBaseUrlPromise: Promise<string> | null = null
+const relaySecret = randomBytes(32)
+
+function signRelayPath(pathname: string): string {
+  return createHmac('sha256', relaySecret).update(pathname).digest('base64url')
+}
 
 const AUDIO_MIME_BY_EXT: Record<string, string> = {
   mp3: 'audio/mpeg',
@@ -274,6 +280,14 @@ async function handleRelayRequest(req: IncomingMessage, res: ServerResponse): Pr
     return
   }
 
+  // Only source URLs issued through desktop IPC may read files or proxy streams.
+  const token = Buffer.from(requestUrl.searchParams.get('token') ?? '')
+  const expectedToken = Buffer.from(signRelayPath(requestUrl.pathname))
+  if (token.length !== expectedToken.length || !timingSafeEqual(token, expectedToken)) {
+    writeTextError(res, 403, 'Invalid relay token')
+    return
+  }
+
   if (requestUrl.pathname.startsWith('/remote/')) {
     await handleRemoteRelay(req, res, requestUrl.pathname.slice('/remote/'.length))
     return
@@ -315,9 +329,8 @@ export async function getRadioRelayUrl(source: RadioRelaySource): Promise<string
   const encodedValue = encodeRelayValue(source.value)
   const fileExtension = relayFileExtension(source)
   const extensionSuffix = fileExtension ? `.${fileExtension}` : ''
-  return source.kind === 'remote'
-    ? `${baseUrl}/remote/${encodedValue}${extensionSuffix}`
-    : `${baseUrl}/local/${encodedValue}${extensionSuffix}`
+  const pathname = `/${source.kind === 'remote' ? 'remote' : 'local'}/${encodedValue}${extensionSuffix}`
+  return `${baseUrl}${pathname}?token=${signRelayPath(pathname)}`
 }
 
 export async function stopRadioRelayServer(): Promise<void> {
