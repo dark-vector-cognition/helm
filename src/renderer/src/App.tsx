@@ -770,13 +770,13 @@ function App(): JSX.Element {
           <ShellNav currentPage={currentPage} setCurrentPage={setCurrentPage} />
 
           <main className="shell-main flex-1 min-h-0 overflow-hidden flex flex-col">
-            <div className="shell-page-scroll flex-1 min-h-0 overflow-y-auto">
+            <div className="shell-page-scroll flex-1 min-h-0 overflow-y-auto" key={currentPage}>
               <PageHeader meta={activePageMeta} />
               <div className="shell-metrics">
                 <ScorecardsStrip />
               </div>
               {(currentPage === 'bridge' || currentPage === 'fleet') && <SessionDeltaBanner />}
-              <div className="shell-page-content" key={currentPage}>
+              <div className="shell-page-content">
                 <PageContent currentPage={currentPage} />
               </div>
             </div>
