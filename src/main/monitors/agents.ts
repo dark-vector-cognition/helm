@@ -1,4 +1,4 @@
-import type { ProcessInfo, AgentInfo, AgentStatus } from '../../shared/types'
+import type { ProcessInfo, AgentInfo } from '../../shared/types'
 
 interface AgentPattern {
   type: AgentInfo['type']
@@ -71,7 +71,12 @@ const AGENT_PATTERNS: AgentPattern[] = [
     match: (proc) => {
       const lower = proc.command.toLowerCase()
       return (
-        (lower.includes('/applications/cursor.app/') || /(^|\s)cursor(\s|$)/i.test(proc.command)) &&
+        (lower.includes('/applications/cursor.app/') ||
+          /(^|\s)cursor(\s|$)/i.test(proc.command) ||
+          /^(?:\S*\/)?cursor-agent(?:\s|$)/i.test(proc.command)) &&
+        !lower.includes('cursor helper') &&
+        !/--type(?:=|\s)/.test(lower) &&
+        !lower.includes('crashpad') &&
         !lower.includes('cursoruiviewservice') &&
         !lower.includes('setcursor')
       )
@@ -111,7 +116,8 @@ export function detectAgents(processes: ProcessInfo[]): AgentInfo[] {
           id: `pid:${proc.pid}`,
           name: pattern.displayName,
           type: pattern.type,
-          status: inferStatus(proc),
+          // A running process and CPU usage do not establish the agent's task state.
+          status: 'unknown',
           source: 'process',
           pid: proc.pid,
           workingDir: proc.cwd
@@ -137,10 +143,4 @@ export function detectAgents(processes: ProcessInfo[]): AgentInfo[] {
       name: count > 1 ? `${agent.name} #${count}` : agent.name
     }
   })
-}
-
-function inferStatus(proc: ProcessInfo): AgentStatus {
-  if (proc.cpu > 5) return 'active'
-  if (proc.cpu > 1) return 'busy'
-  return 'idle'
 }

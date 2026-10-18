@@ -1,0 +1,36 @@
+import { describe, expect, it, vi } from 'vitest'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+
+const fixture = vi.hoisted(() => ({ status: 'unknown' }))
+vi.mock('./system', () => ({ useSystemStore: (select: (state: unknown) => unknown) => select({ state: {
+  agents: [{ id: 'review', name: 'Reviewer', type: 'other', source: 'state-file',
+    status: fixture.status, currentAction: 'Review the workspace' }],
+  processes: [], ports: [], gitRepos: [], cpu: { usage: 0 }, memory: { usagePercent: 0 }
+} }) }))
+vi.mock('./timeseries', () => ({ useTimeSeriesStore: () => ({
+  cpuHistory: [], memHistory: [], netInHistory: [], netOutHistory: []
+}) }))
+vi.mock('./navigation', () => ({ useNavigationStore: (select: (state: unknown) => unknown) => select({ setCurrentPage: () => {} }) }))
+vi.mock('./privacy', () => ({ usePrivacyStore: (select: (state: unknown) => unknown) => select({ privacyMode: true }), redactSensitiveText: (text: string) => text }))
+import { ScorecardsStrip } from '../panels/ScorecardsStrip'
+import { HeaderTicker } from '../components/HeaderTicker'
+
+describe('agent state summaries', () => {
+  it('does not turn unknown task state into idle or present-tense task activity', () => {
+    fixture.status = 'unknown'
+    const score = renderToStaticMarkup(createElement(ScorecardsStrip))
+    const ticker = renderToStaticMarkup(createElement(HeaderTicker))
+    expect(score).toContain('Agents • unknown')
+    expect(score).not.toContain('Agents • idle')
+    expect(ticker).toContain('1 unknown')
+    expect(ticker).toContain('LAST REPORT: Review the workspace')
+  })
+
+  it('keeps an explicitly reported waiting state visible', () => {
+    fixture.status = 'waiting'
+    const score = renderToStaticMarkup(createElement(ScorecardsStrip))
+    expect(score).toContain('Agents • 1 waiting')
+    expect(score).not.toContain('Agents • reported idle')
+  })
+})

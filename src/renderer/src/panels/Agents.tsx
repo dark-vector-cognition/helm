@@ -146,6 +146,12 @@ function displayText(value: string | undefined, privacyMode: boolean): string | 
   return privacyMode ? redactSensitiveText(value) : value
 }
 
+function statusHint(agent: AgentInfo): string {
+  if (agent.source === 'process') return 'Process detected. Task status is not reported.'
+  if (agent.status === 'unknown') return 'Task status unavailable. Check the feed status and heartbeat.'
+  return 'Task status reported by the agent feed.'
+}
+
 function MetricCard({
   label,
   value,
@@ -214,7 +220,7 @@ export function AgentsPanel(): JSX.Element {
 
         <div className="flex items-center text-[10px] text-gray-600 uppercase tracking-wider px-3 py-2 border-b border-gray-800/40">
           <span className="flex-1">Agent</span>
-          <span className="w-20 text-center">Status</span>
+          <span className="w-20 text-center">Task state</span>
           <span className="w-24 text-right">Context</span>
           <span className="w-28 text-right">Handle</span>
           <span className="w-5 text-right" />
@@ -249,6 +255,7 @@ function AgentRow({
   processGroups: { name: string; processes: ProcessInfo[] }[]
 }): JSX.Element {
   const selectAgent = useUIStore((store) => store.selectAgent)
+  const privacyMode = usePrivacyStore((store) => store.privacyMode)
 
   const style = STATUS_STYLES[agent.status]
   const workspaceName = getWorkspaceName(agent, processGroups)
@@ -261,7 +268,7 @@ function AgentRow({
         : '-')
   const handleLabel = agent.pid != null ? `PID ${agent.pid}` : agent.agentId ?? '-'
   const secondaryLabel =
-    agent.currentAction ??
+    displayText(agent.currentAction, privacyMode) ??
     (agent.source === 'state-file' && agent.sessionId ? `Session ${agent.sessionId}` : undefined)
   const kindLabel = TYPE_LABELS[agent.type]
 
@@ -293,8 +300,9 @@ function AgentRow({
             </span>
           )}
         </div>
+        <div className="mt-0.5 pl-5 text-[10px] text-gray-500">{agent.source === 'process' ? 'Process only · task unknown' : 'Agent state feed'}</div>
         {secondaryLabel && (
-          <div className="mt-0.5 truncate pl-5 text-[10px] text-gray-500">{secondaryLabel}</div>
+          <div className="mt-0.5 truncate pl-5 text-[10px] text-gray-500">{agent.status === 'unknown' ? 'Last report: ' : ''}{secondaryLabel}</div>
         )}
       </div>
 
@@ -468,6 +476,7 @@ function AgentDetailPanel({
       </div>
 
       <div className="min-h-0 space-y-3 overflow-y-auto p-4 text-sm">
+        <p className="text-xs text-gray-400">{statusHint(agent)}</p>
         <div className="grid gap-2 md:grid-cols-2">
           <MetricCard label="Handle" value={agent.pid != null ? `PID ${agent.pid}` : agent.agentId ?? 'n/a'} />
           <MetricCard label="Workspace" value={workspaceName ?? 'unmapped'} />
@@ -531,7 +540,7 @@ function AgentDetailPanel({
 
         <div className="rounded-lg border border-white/10 bg-black/25 p-3">
           <div className="text-[9px] uppercase tracking-[0.18em] text-gray-500 font-[family-name:var(--helm-font-mono)]">
-            Current Focus
+            Last Reported Focus
           </div>
           <div className="mt-2 rounded bg-black/35 px-3 py-2 text-xs text-gray-200">
             {displayAction ?? 'No current action reported for this agent.'}

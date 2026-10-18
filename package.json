@@ -35,7 +35,8 @@
     "pretest": "npm run rebuild:node 2>/dev/null || true",
     "test": "vitest run",
     "pretest:watch": "npm run rebuild:node 2>/dev/null || true",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:agent-hooks": "node --test scripts/cursor-agent-hook.test.mjs"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.0",

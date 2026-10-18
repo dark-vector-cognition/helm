@@ -4,6 +4,8 @@ import { renderToStaticMarkup } from 'react-dom/server'
 
 const fixture = vi.hoisted(() => ({
   privacyMode: true,
+  source: 'process',
+  status: 'unknown',
   processCwd: '/srv/runtime-private-directory' as string | undefined,
   agentCwd: '/srv/agent-private-directory',
   command: 'node worker --objective private-task-marker --token private-argument-marker'
@@ -18,8 +20,8 @@ vi.mock('./system', () => ({
             id: 'worker-42',
             name: 'Worker',
             type: 'codex',
-            status: 'active',
-            source: 'process',
+            status: fixture.status,
+            source: fixture.source,
             pid: 42,
             workingDir: fixture.agentCwd
           }
@@ -50,7 +52,25 @@ import { AgentsPanel } from '../panels/Agents'
 describe('agent runtime privacy', () => {
   beforeEach(() => {
     fixture.privacyMode = true
+    fixture.source = 'process'
+    fixture.status = 'unknown'
     fixture.processCwd = '/srv/runtime-private-directory'
+  })
+
+  it('explains that a detected process does not report task state', () => {
+    const markup = renderToStaticMarkup(createElement(AgentsPanel))
+    expect(markup).toContain('Process only · task unknown')
+    expect(markup).toContain('Task status is not reported.')
+    expect(markup).toContain('Task state')
+  })
+
+  it('identifies reported state separately from process CPU samples', () => {
+    fixture.source = 'state-file'
+    fixture.status = 'waiting'
+    const markup = renderToStaticMarkup(createElement(AgentsPanel))
+    expect(markup).toContain('Task status reported by the agent feed.')
+    expect(markup).toContain('State Feed')
+    expect(markup).not.toContain('Process only · task unknown')
   })
 
   it('hides the entire command and working directory in Secure View', () => {

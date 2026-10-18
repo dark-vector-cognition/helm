@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "command": "\"/absolute/path/to/node\" \"/absolute/path/to/helm/scripts/cursor-agent-hook.mjs\" sessionStart"
+      }
+    ],
+    "beforeSubmitPrompt": [
+      {
+        "command": "\"/absolute/path/to/node\" \"/absolute/path/to/helm/scripts/cursor-agent-hook.mjs\" beforeSubmitPrompt"
+      }
+    ],
+    "preToolUse": [
+      {
+        "command": "\"/absolute/path/to/node\" \"/absolute/path/to/helm/scripts/cursor-agent-hook.mjs\" preToolUse"
+      }
+    ],
+    "postToolUse": [
+      {
+        "command": "\"/absolute/path/to/node\" \"/absolute/path/to/helm/scripts/cursor-agent-hook.mjs\" postToolUse"
+      }
+    ],
+    "stop": [
+      {
+        "command": "\"/absolute/path/to/node\" \"/absolute/path/to/helm/scripts/cursor-agent-hook.mjs\" stop"
+      }
+    ],
+    "sessionEnd": [
+      {
+        "command": "\"/absolute/path/to/node\" \"/absolute/path/to/helm/scripts/cursor-agent-hook.mjs\" sessionEnd"
+      }
+    ]
+  }
+}

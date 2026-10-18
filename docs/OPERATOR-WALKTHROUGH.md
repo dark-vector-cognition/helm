@@ -33,7 +33,8 @@ Use `Fleet` for repos, workspace drift, and process orchestration.
 
 Use `Swarm` when you want the real agent roster instead of a vague badge.
 
-- Tracks detected agent sessions such as Codex, Claude Code, Cursor, Gemini CLI, and other supported tools.
+- Shows detected processes for supported tools, including Cursor. Process presence does not prove a running task.
+- Shows fresh task reports from [Cursor hooks and other agent state feeds](AGENT-SUPPORT.md).
 - Clicking an agent drills into PID, command, workspace, ports, and related timeline context.
 
 ### Grid

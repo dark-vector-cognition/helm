@@ -12,8 +12,7 @@ import type {
   TimelineEventType
 } from '../../shared/types'
 
-const WAITING_HEARTBEAT_MS = 2 * 60 * 1000
-const STALE_HEARTBEAT_MS = 10 * 60 * 1000
+const STALE_HEARTBEAT_MS = 2 * 60 * 1000
 
 export function getDefaultAgentFeedPaths(homeDir = homedir()): string[] {
   return [
@@ -27,6 +26,7 @@ const DEFAULT_AGENT_FEED_PATHS = getDefaultAgentFeedPaths()
 
 interface RawAgentState {
   agent_id?: unknown
+  display_name?: unknown
   current_tick?: unknown
   session_id?: unknown
   session_start?: unknown
@@ -146,9 +146,9 @@ export function parseAgentState(
 
   return {
     id: `agent:${agentId}`,
-    name: agentId,
-    type: inferAgentType(agentId, currentAction),
-    status: normalizeAgentStatus(parsed.status, lastHeartbeat, currentAction, now),
+    name: asString(parsed.display_name)?.slice(0, 80) || agentId,
+    type: inferAgentType(agentId),
+    status: normalizeAgentStatus(parsed.status, lastHeartbeat, now),
     source: 'state-file',
     agentId,
     sessionId: asString(parsed.session_id) || undefined,
@@ -242,13 +242,10 @@ export function parseTraceLine(
 function normalizeAgentStatus(
   rawStatus: unknown,
   lastHeartbeat: number | null,
-  currentAction: string | null,
   now: number
 ): AgentStatus {
-  if (lastHeartbeat != null) {
-    const age = now - lastHeartbeat
-    if (age >= STALE_HEARTBEAT_MS) return 'unknown'
-    if (age >= WAITING_HEARTBEAT_MS) return 'waiting'
+  if (lastHeartbeat == null || now < lastHeartbeat || now - lastHeartbeat >= STALE_HEARTBEAT_MS) {
+    return 'unknown'
   }
 
   const normalized = asString(rawStatus)?.toLowerCase()
@@ -258,12 +255,11 @@ function normalizeAgentStatus(
   if (normalized === 'waiting') return 'waiting'
   if (normalized === 'unknown') return 'unknown'
 
-  if (currentAction) return 'busy'
-  return 'active'
+  return 'unknown'
 }
 
-function inferAgentType(agentId: string, currentAction: string | null): AgentType {
-  const haystack = `${agentId} ${currentAction ?? ''}`.toLowerCase()
+function inferAgentType(agentId: string): AgentType {
+  const haystack = agentId.toLowerCase()
 
   if (/\bcodex\b/.test(haystack)) return 'codex'
   if (/\bclaude\b/.test(haystack)) return 'claude-code'

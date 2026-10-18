@@ -81,10 +81,11 @@ function buildTickerItems(
   const activeAgents = agentSnapshots.filter(({ agent }) => agent.status === 'active').length
   const busyAgents = agentSnapshots.filter(({ agent }) => agent.status === 'busy').length
   const waitingAgents = agentSnapshots.filter(({ agent }) => agent.status === 'waiting').length
+  const unknownAgents = agentSnapshots.filter(({ agent }) => agent.status === 'unknown').length
 
   if (agentSnapshots.length > 0) {
     items.push(
-      `SWARM // ${agentSnapshots.length} online • ${activeAgents} active • ${busyAgents} busy${waitingAgents > 0 ? ` • ${waitingAgents} waiting` : ''}`
+      `SWARM // ${agentSnapshots.length} detected • ${activeAgents} active • ${busyAgents} busy${waitingAgents > 0 ? ` • ${waitingAgents} waiting` : ''}${unknownAgents > 0 ? ` • ${unknownAgents} unknown` : ''}`
     )
   }
 
@@ -95,7 +96,7 @@ function buildTickerItems(
   if (hottestAgent?.process) {
     const workspaceHint = hottestAgent.workspace ? ` • ${hottestAgent.workspace}` : ''
     items.push(
-      `${hottestAgent.agent.name.toUpperCase()} HOT // PID ${hottestAgent.process.pid} • ${hottestAgent.process.cpu.toFixed(1)}% CPU • ${hottestAgent.process.mem.toFixed(1)}% MEM${workspaceHint}`
+      `${hottestAgent.agent.name.toUpperCase()} PROCESS // PID ${hottestAgent.process.pid} • ${hottestAgent.process.cpu.toFixed(1)}% CPU • ${hottestAgent.process.mem.toFixed(1)}% MEM${workspaceHint}`
     )
   }
 
@@ -103,7 +104,7 @@ function buildTickerItems(
     const action = snapshot.agent.currentAction?.trim()
     if (!action) continue
     items.push(
-      `${snapshot.agent.name.toUpperCase()} // ${truncate(toDisplayText(action, privacyMode), 96)}`
+      `${snapshot.agent.name.toUpperCase()} // ${snapshot.agent.status === 'unknown' ? 'LAST REPORT: ' : 'REPORT: '}${truncate(toDisplayText(action, privacyMode), 96)}`
     )
   }
 
