@@ -245,11 +245,11 @@
 .shell-run-stage small {
   display: block;
   margin-top: 7px;
-  font: 8px var(--helm-font-mono);
-  color: var(--helm-shell-subtle);
+  font: 11px var(--helm-font-mono);
+  color: var(--helm-shell-muted);
   text-transform: uppercase;
 }
-.shell-run-stage span {
+.shell-run-stage > div > span {
   display: block;
   height: 3px;
   background: var(--helm-border-strong);

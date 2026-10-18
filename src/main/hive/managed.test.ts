@@ -1,10 +1,10 @@
 import { EventEmitter } from 'node:events'
-import { chmodSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { chmodSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ManagedHive } from './managed'
-import type { HiveSpawnRequest } from '../../shared/types'
+import type { HiveSessionInfo, HiveSpawnRequest } from '../../shared/types'
 
 const { mockFork } = vi.hoisted(() => ({ mockFork: vi.fn() }))
 vi.mock('child_process', () => ({ fork: mockFork }))
@@ -37,6 +37,22 @@ function complete(worker: Worker): void {
   event(worker, { type: 'turn.completed', usage: { input_tokens: 4, output_tokens: 3 } })
   worker.emit('message', { type: 'exit', code: 0 })
   worker.emit('exit', 0)
+}
+
+function journals(count: number, state: 'reviewed' | 'needs-review' = 'reviewed'): string[] {
+  mkdirSync(directory, { mode: 0o700 })
+  return Array.from({ length: count }, (_, index) => {
+    const id = `00000000-0000-0000-0000-${String(index).padStart(12, '0')}`
+    const run: HiveSessionInfo = {
+      id, provider: 'codex', role: 'analyst', model: 'default', tmuxSession: '', tmuxWindow: '',
+      workingDir: workspace, objective: 'Saved objective', permissionMode: 'read-only',
+      startedAt: count - index, lastEventAt: index + 1000, status: 'idle', taskState: state, result: 'Saved result'
+    }
+    const file = join(directory, `${id}.json`)
+    writeFileSync(file, JSON.stringify(run), { mode: 0o600 })
+    utimesSync(file, index + 1000, index + 1000)
+    return id
+  })
 }
 
 beforeEach(() => {
@@ -161,9 +177,81 @@ describe('managed agent lifecycle', () => {
     expect(hive.has(id)).toBe(true)
     expect(hive.has('absent')).toBe(false)
   })
+
+  it('projects telemetry and announces updates without cloning full run history', () => {
+    const updates = vi.fn()
+    const hive = new ManagedHive(directory, '/worker.js', updates)
+    const { id, worker } = start(hive)
+    const clone = vi.spyOn(globalThis, 'structuredClone')
+    try {
+      worker.emit('message', { type: 'spawn', pid: 1234 })
+      event(worker, { type: 'turn.started' })
+      const agent = hive.agents()[0]
+      expect(agent).toMatchObject({ id: `hive:${id}`, status: 'active', pid: 1234, workingDir: workspace })
+      expect(agent).not.toHaveProperty('objective')
+      expect(agent).not.toHaveProperty('result')
+      expect(agent).not.toHaveProperty('events')
+      expect(updates).toHaveBeenLastCalledWith()
+      expect(clone).not.toHaveBeenCalled()
+      agent.currentAction = 'tampered'
+      expect(hive.agents()[0].currentAction).not.toBe('tampered')
+    } finally { clone.mockRestore() }
+    expect(hive.list()[0].objective).toBe('Inspect sample.txt')
+  })
 })
 
 describe('managed launch and journal boundaries', () => {
+  it('reports unavailable managed launch on Windows before touching journals or forking', () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    try {
+      const hive = new ManagedHive(directory, '/worker.js')
+      expect(hive.launch(request())).toEqual({ success: false, error: 'Managed launch currently requires macOS or Linux process groups.' })
+      expect(hive.list()).toEqual([])
+      expect(mockFork).not.toHaveBeenCalled()
+      expect(readdirSync(root)).toEqual(['workspace'])
+    } finally { Object.defineProperty(process, 'platform', platform) }
+  })
+
+  it('recovers the newest 500 safe journals by modification time without deleting older files', () => {
+    const ids = journals(501)
+    const hive = new ManagedHive(directory, '/worker.js')
+    expect(hive.list()).toHaveLength(500)
+    expect(hive.has(ids[0])).toBe(false)
+    expect(hive.has(ids.at(-1)!)).toBe(true)
+    expect(readdirSync(directory)).toHaveLength(501)
+  })
+
+  it('bounds completed history in memory while retaining active and pending-review runs', () => {
+    const ids = journals(500)
+    const pendingFile = join(directory, `${ids[0]}.json`)
+    const pending = JSON.parse(readFileSync(pendingFile, 'utf8'))
+    writeFileSync(pendingFile, JSON.stringify({ ...pending, taskState: 'needs-review' }))
+    const hive = new ManagedHive(directory, '/worker.js')
+    const first = start(hive)
+    const second = start(hive)
+    expect(hive.list()).toHaveLength(500)
+    expect(hive.has(ids[0])).toBe(true)
+    expect(hive.has(ids[1])).toBe(false)
+    expect(hive.has(ids[2])).toBe(false)
+    expect(hive.has(first.id)).toBe(true)
+    expect(hive.has(second.id)).toBe(true)
+    expect(readdirSync(directory)).toHaveLength(502)
+  })
+
+  it('preserves pending review above the history limit until the operator reviews a result', () => {
+    const ids = journals(500, 'needs-review')
+    const hive = new ManagedHive(directory, '/worker.js')
+    const active = start(hive)
+    expect(hive.list()).toHaveLength(501)
+    expect(hive.has(ids[0])).toBe(true)
+    expect(hive.has(active.id)).toBe(true)
+    expect(hive.review(ids[0]).success).toBe(true)
+    expect(hive.list()).toHaveLength(500)
+    expect(readdirSync(directory)).toHaveLength(501)
+    expect(JSON.parse(readFileSync(join(directory, `${ids[0]}.json`), 'utf8')).taskState).toBe('reviewed')
+  })
+
   it.each([
     { objective: '' }, { objective: ' '.repeat(10) }, { objective: 'x'.repeat(16001) },
     { provider: 'unknown' }, { permissionMode: 'unsafe' }, { workingDir: 'relative' },

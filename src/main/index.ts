@@ -36,7 +36,7 @@ import { clearStoredApiKey, getRedactedConfig, loadConfig, saveConfig } from './
 import { getAgentRegistry, getAgentById, updateAgentEntry, getTopAgents } from './registry'
 import { getRadioRelayUrl, stopRadioRelayServer } from './radio-relay'
 import { getSkillFeed } from './skills'
-import { setupHiveIPC, teardownHive, resolveHiveConfig } from './hive/index'
+import { setupHiveIPC, teardownHive, shutdownHive, resolveHiveConfig } from './hive/index'
 import { VaultClient } from './vault-client'
 import type { HelmConfig, SystemState, AgentRegistryEntry } from '../shared/types'
 
@@ -346,7 +346,7 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   globalShortcut.unregisterAll()
-  teardownHive()
+  shutdownHive()
   stopSentinel()
   stopMonitoring()
   void stopRadioRelayServer()

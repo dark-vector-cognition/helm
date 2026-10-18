@@ -4,11 +4,12 @@ import { IPC_CHANNELS } from '../shared/types'
 const mocks = vi.hoisted(() => ({
   handlers: new Map<string, (...args: any[]) => any>(),
   appEvents: new Map<string, () => void>(),
-  windows: [] as { events: Map<string, () => void> }[],
+  windows: [] as { events: Map<string, () => void>; webContents: { send: ReturnType<typeof vi.fn> } }[],
   hiveEnabled: false,
   spawn: vi.fn(async () => ({ success: true })),
   killSession: vi.fn(),
   managedShutdown: vi.fn(),
+  managedUpdate: undefined as (() => void) | undefined,
   startMonitoring: vi.fn(),
   stopMonitoring: vi.fn()
 }))
@@ -77,7 +78,14 @@ vi.mock('./hive/spawner', () => ({
   attachToHiveSession: vi.fn(),
   getSessionRegistry: () => new Map()
 }))
-vi.mock('./hive/managed', () => ({ ManagedHive: class { launch = mocks.spawn; shutdown = mocks.managedShutdown; list = () => []; has = () => false } }))
+vi.mock('./hive/managed', () => ({ ManagedHive: class {
+  constructor(_directory: string, _worker: string, onUpdate: () => void) { mocks.managedUpdate = onUpdate }
+  launch = mocks.spawn
+  shutdown = mocks.managedShutdown
+  list = () => []
+  agents = () => []
+  has = () => false
+} }))
 vi.mock('./hive/context', () => ({ readSharedContext: vi.fn(), writeSharedContext: vi.fn() }))
 vi.mock('./sentinel/notify', () => ({ dispatchAlert: vi.fn() }))
 vi.mock('fs', () => ({
@@ -142,6 +150,9 @@ it('cleans up window services before reopening and respects the HIVE enable swit
   expect(vi.getTimerCount()).toBe(0)
   expect(mocks.handlers.has(IPC_CHANNELS.HIVE_SPAWN)).toBe(false)
   expect(mocks.killSession).not.toHaveBeenCalled()
+  expect(mocks.managedShutdown).not.toHaveBeenCalled()
+  mocks.managedUpdate!()
+  expect(mocks.windows[0].webContents.send).not.toHaveBeenCalled()
 
   mocks.hiveEnabled = true
   expect(() => mocks.appEvents.get('activate')!()).not.toThrow()
@@ -152,8 +163,23 @@ it('cleans up window services before reopening and respects the HIVE enable swit
     success: true
   })
   expect(mocks.spawn).toHaveBeenCalledWith(request)
+  mocks.managedUpdate!()
+  expect(mocks.windows[1].webContents.send).toHaveBeenCalledWith(IPC_CHANNELS.HIVE_SESSION_UPDATE, [])
+  expect(mocks.windows[0].webContents.send).not.toHaveBeenCalled()
+
+  const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
+  Object.defineProperty(process, 'platform', { value: 'win32' })
+  try {
+    expect(mocks.handlers.get(IPC_CHANNELS.HIVE_LAUNCH_STATE)!()).toEqual({
+      enabled: false,
+      reason: 'Managed agent launch is not available on Windows in this build. Monitoring remains available.'
+    })
+  } finally { Object.defineProperty(process, 'platform', platform) }
 
   mocks.windows[1].events.get('closed')!()
   expect(vi.getTimerCount()).toBe(0)
   expect(mocks.handlers.has(IPC_CHANNELS.HIVE_SPAWN)).toBe(false)
+  expect(mocks.managedShutdown).not.toHaveBeenCalled()
+  mocks.appEvents.get('before-quit')!()
+  expect(mocks.managedShutdown).toHaveBeenCalledTimes(1)
 })

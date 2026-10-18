@@ -281,13 +281,13 @@ export function HiveLauncher(): JSX.Element {
                 {managed && (
                   <>
                     <p className="shell-run-objective">{display(session.objective ?? '')}</p>
-                    <div className="shell-run-stage" aria-label={`Run state: ${session.taskState}`}>
+                    <div className="shell-run-stage" role="group" aria-label={`Run state: ${session.taskState}`}>
                       {getRunStages(session).map((stage) => (
                         <div key={stage.label}>
                           <span
                             className={stage.done ? 'is-done' : stage.current ? 'is-current' : ''}
                           />
-                          <small>{stage.label}</small>
+                          <small>{stage.label}<span className="sr-only">{stage.done ? ", done" : stage.current ? ", current" : ", pending"}</span></small>
                         </div>
                       ))}
                     </div>

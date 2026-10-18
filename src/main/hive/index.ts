@@ -137,7 +137,6 @@ export function setupHiveIPC(mainWindow: BrowserWindow, hiveConfig: HiveConfig):
 }
 
 export function teardownHive(): void {
-  managed?.shutdown()
   notifyManaged = () => {}
   ipcMain.removeHandler(IPC_CHANNELS.HIVE_LAUNCH_STATE)
   ipcMain.removeHandler(IPC_CHANNELS.HIVE_RETRY)
@@ -149,6 +148,11 @@ export function teardownHive(): void {
   ipcMain.removeHandler(IPC_CHANNELS.HIVE_UPDATE_CONTEXT)
   ipcMain.removeHandler(IPC_CHANNELS.HIVE_GET_CONTEXT)
   ipcMain.removeHandler(IPC_CHANNELS.HIVE_ATTACH)
+}
+
+export function shutdownHive(): void {
+  teardownHive()
+  managed?.shutdown()
 }
 
 /**
@@ -192,11 +196,5 @@ export function decorateAgentsWithHive(
 }
 
 export function getManagedAgents(): AgentInfo[] {
-  return (managed?.list() ?? []).map((run) => ({
-    id: `hive:${run.id}`, name: `${run.provider} ${run.role}`, type: run.provider!, source: 'state-file',
-    status: run.taskState === 'working' ? 'active' : run.taskState === 'needs-review' ? 'waiting' : run.taskState === 'reviewed' ? 'idle' : 'unknown',
-    pid: run.status === 'running' ? run.pid : undefined, workingDir: run.workingDir,
-    agentId: run.id, hiveSessionId: run.id, hiveRole: run.role, lastHeartbeat: run.lastEventAt,
-    currentAction: run.events?.at(-1)?.message
-  }))
+  return managed?.agents() ?? []
 }
