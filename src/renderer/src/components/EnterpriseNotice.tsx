@@ -4,7 +4,7 @@ export function EnterpriseNotice(): JSX.Element {
       <p className="shell-enterprise-label">HELM Light · Free &amp; open source</p>
       <p>Need HELM for your team?</p>
       <a
-        href="https://darkvectorcognition.ai/applications/#helm"
+        href="https://darkvectorcognition.ai/helm/#enterprise"
         target="_blank"
         rel="noopener noreferrer"
       >

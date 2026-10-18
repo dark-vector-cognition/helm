@@ -4,15 +4,17 @@ HELM is a desktop ops shell for developers running AI agents, local services, an
 
 Current version: `5.0.0`. Helm Light is free and open source under [Apache-2.0](LICENSE).
 
+[Product page, demo and roadmap](https://darkvectorcognition.ai/helm/).
+
 ## See HELM in use
 
 [![Watch the HELM review demo](docs/media/helm-demo-poster.jpg)](docs/media/helm-demo-review.mp4)
 
 [Watch the narrated demo (MP4)](docs/media/helm-demo-review.mp4).
 
-The demo and screenshots show a review build based on `5.0.0`, including fixes that have not shipped. Dates in the demo are proposed 2026 roadmap targets for review, not release promises. See the [roadmap and release status](docs/ROADMAP.md).
+The demo and screenshots show a review build based on `5.0.0`, including fixes that have not shipped. Dates in the demo are 2026 roadmap targets, not release promises. See the [roadmap and release status](docs/ROADMAP.md).
 
-Need Helm for your team? [Discuss enterprise with DVC](https://darkvectorcognition.ai/applications/#helm).
+Need Helm for your team? [Discuss enterprise with DVC](https://darkvectorcognition.ai/helm/#enterprise).
 
 ## What's new in 5.0
 
