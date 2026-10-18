@@ -84,7 +84,12 @@ export function setupHiveIPC(mainWindow: BrowserWindow, hiveConfig: HiveConfig):
   try {
     managed ??= new ManagedHive(join(app.getPath('userData'), 'hive-runs'), join(__dirname, 'hive-worker.js'), () => notifyManaged(), hiveConfig.claudeBinPath)
   } catch (error) { managedError = error instanceof Error ? error.message : 'Run journal unavailable.' }
-  ipcMain.handle(IPC_CHANNELS.HIVE_LAUNCH_STATE, () => ({ enabled: hiveConfig.enabled }))
+  ipcMain.handle(IPC_CHANNELS.HIVE_LAUNCH_STATE, () => ({
+    enabled: hiveConfig.enabled && process.platform !== 'win32',
+    reason: process.platform === 'win32'
+      ? 'Managed agent launch is not available on Windows in this build. Monitoring remains available.'
+      : !hiveConfig.enabled ? 'Agent launch is disabled in this installation. Monitoring remains available.' : undefined
+  }))
   ipcMain.handle(IPC_CHANNELS.HIVE_RETRY, (_event, id: string) => {
     if (!hiveConfig.enabled) return { success: false, error: 'HIVE is disabled' }
     return managed?.retry(id) ?? { success: false, error: managedError }
@@ -132,7 +137,6 @@ export function setupHiveIPC(mainWindow: BrowserWindow, hiveConfig: HiveConfig):
 }
 
 export function teardownHive(): void {
-  managed?.shutdown()
   notifyManaged = () => {}
   ipcMain.removeHandler(IPC_CHANNELS.HIVE_LAUNCH_STATE)
   ipcMain.removeHandler(IPC_CHANNELS.HIVE_RETRY)
@@ -144,6 +148,11 @@ export function teardownHive(): void {
   ipcMain.removeHandler(IPC_CHANNELS.HIVE_UPDATE_CONTEXT)
   ipcMain.removeHandler(IPC_CHANNELS.HIVE_GET_CONTEXT)
   ipcMain.removeHandler(IPC_CHANNELS.HIVE_ATTACH)
+}
+
+export function shutdownHive(): void {
+  teardownHive()
+  managed?.shutdown()
 }
 
 /**
@@ -187,11 +196,5 @@ export function decorateAgentsWithHive(
 }
 
 export function getManagedAgents(): AgentInfo[] {
-  return (managed?.list() ?? []).map((run) => ({
-    id: `hive:${run.id}`, name: `${run.provider} ${run.role}`, type: run.provider!, source: 'state-file',
-    status: run.taskState === 'working' ? 'active' : run.taskState === 'needs-review' ? 'waiting' : run.taskState === 'reviewed' ? 'idle' : 'unknown',
-    pid: run.status === 'running' ? run.pid : undefined, workingDir: run.workingDir,
-    agentId: run.id, hiveSessionId: run.id, hiveRole: run.role, lastHeartbeat: run.lastEventAt,
-    currentAction: run.events?.at(-1)?.message
-  }))
+  return managed?.agents() ?? []
 }

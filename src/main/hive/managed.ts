@@ -2,12 +2,13 @@ import { fork, type ChildProcess } from 'child_process'
 import { randomUUID } from 'crypto'
 import { lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, writeFileSync, unlinkSync } from 'fs'
 import { isAbsolute, join } from 'path'
-import type { HiveProvider, HiveSessionInfo, HiveSpawnRequest, HiveSpawnResult, HiveTaskState } from '../../shared/types'
+import type { AgentInfo, HiveProvider, HiveSessionInfo, HiveSpawnRequest, HiveSpawnResult, HiveTaskState } from '../../shared/types'
 import { buildProviderCommand, parseProviderEvent } from './providers'
 
 const ACTIVE = new Set<HiveTaskState>(['starting', 'working', 'stopping'])
 const PROVIDERS: HiveProvider[] = ['claude-code', 'cursor', 'codex']
 const STATES: HiveTaskState[] = ['starting', 'working', 'stopping', 'needs-review', 'reviewed', 'failed', 'stopped', 'interrupted']
+const HISTORY_LIMIT = 500
 
 export class ManagedHive {
   private runs = new Map<string, HiveSessionInfo>()
@@ -18,12 +19,19 @@ export class ManagedHive {
   constructor(
     private directory: string,
     private workerPath: string,
-    private onUpdate: (runs: HiveSessionInfo[]) => void = () => {},
+    private onUpdate: () => void = () => {},
     private claudeBinPath = 'claude'
   ) {
     if (process.platform === 'win32') return
     this.ensureDirectory()
-    for (const name of readdirSync(directory).filter((name) => /^[a-f0-9-]{36}\.json$/.test(name)).slice(0, 500)) {
+    const candidates: { name: string; modifiedAt: number }[] = []
+    for (const name of readdirSync(directory).filter((name) => /^[a-f0-9-]{36}\.json$/.test(name))) {
+      try {
+        const stat = lstatSync(join(directory, name))
+        if (stat.isFile() && !(stat.mode & 0o077) && stat.size <= 128 * 1024) candidates.push({ name, modifiedAt: stat.mtimeMs })
+      } catch { /* A journal can disappear before recovery. */ }
+    }
+    for (const { name } of candidates.sort((a, b) => b.modifiedAt - a.modifiedAt).slice(0, HISTORY_LIMIT)) {
       try {
         const path = join(directory, name)
         const stat = lstatSync(path)
@@ -59,7 +67,26 @@ export class ManagedHive {
     return structuredClone([...this.runs.values()].sort((a, b) => b.startedAt - a.startedAt))
   }
 
+  agents(): AgentInfo[] {
+    return [...this.runs.values()].sort((a, b) => b.startedAt - a.startedAt).map((run) => ({
+      id: `hive:${run.id}`, name: `${run.provider} ${run.role}`, type: run.provider!, source: 'state-file',
+      status: run.taskState === 'working' ? 'active' : run.taskState === 'needs-review' ? 'waiting' : run.taskState === 'reviewed' ? 'idle' : 'unknown',
+      pid: run.status === 'running' ? run.pid : undefined, workingDir: run.workingDir,
+      agentId: run.id, hiveSessionId: run.id, hiveRole: run.role, lastHeartbeat: run.lastEventAt,
+      currentAction: run.events?.at(-1)?.message
+    }))
+  }
+
   has(id: string): boolean { return this.runs.has(id) }
+
+  private trimHistory(): void {
+    const excess = this.runs.size - HISTORY_LIMIT
+    if (excess <= 0) return
+    const completed = [...this.runs.values()]
+      .filter((run) => !ACTIVE.has(run.taskState!) && run.taskState !== 'needs-review' && !this.workers.has(run.id))
+      .sort((a, b) => (a.lastEventAt ?? a.startedAt) - (b.lastEventAt ?? b.startedAt))
+    for (const run of completed.slice(0, excess)) this.runs.delete(run.id)
+  }
 
   private transition(run: HiveSessionInfo, state: HiveTaskState, message: string): void {
     run.taskState = state
@@ -74,13 +101,15 @@ export class ManagedHive {
       this.ensureDirectory()
       writeFileSync(temporary, JSON.stringify(run), { mode: 0o600, flag: 'wx' })
       renameSync(temporary, join(this.directory, `${run.id}.json`))
-      this.onUpdate(this.list())
+      this.trimHistory()
+      this.onUpdate()
       return true
     } catch {
       this.transition(run, 'failed', 'Cannot save the private run record. Execution stopped.')
       run.error = 'Cannot save the private run record. Check disk space and directory permissions.'
       this.workers.get(run.id)?.send({ type: 'stop' }, () => {})
-      this.onUpdate(this.list())
+      this.trimHistory()
+      this.onUpdate()
       return false
     } finally {
       try { unlinkSync(temporary) } catch { /* Renamed or absent. */ }
@@ -124,12 +153,14 @@ export class ManagedHive {
       })
       worker.once('exit', () => {
         this.workers.delete(run.id)
+        this.finished.delete(run.id)
         if (ACTIVE.has(run.taskState!)) {
           this.transition(run, 'interrupted', 'Supervisor disconnected before a terminal report.')
           run.error = 'Supervisor disconnected. Inspect workspace changes before retry.'
           run.finishedAt = Date.now()
           this.store(run)
         }
+        this.trimHistory()
       })
       worker.send({ type: 'start', ...command, cwd, input: `Role: ${run.role}\nObjective:\n${run.objective}`, timeoutSeconds: seconds }, () => {})
       return { success: true, session: structuredClone(run) }
