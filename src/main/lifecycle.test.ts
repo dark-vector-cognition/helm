@@ -8,12 +8,14 @@ const mocks = vi.hoisted(() => ({
   hiveEnabled: false,
   spawn: vi.fn(async () => ({ success: true })),
   killSession: vi.fn(),
+  managedShutdown: vi.fn(),
   startMonitoring: vi.fn(),
   stopMonitoring: vi.fn()
 }))
 
 vi.mock('electron', () => ({
   app: {
+    getPath: () => '/isolated-test-profile',
     commandLine: { appendSwitch: vi.fn() },
     whenReady: () => Promise.resolve(),
     on: (event: string, callback: () => void) => mocks.appEvents.set(event, callback)
@@ -75,6 +77,7 @@ vi.mock('./hive/spawner', () => ({
   attachToHiveSession: vi.fn(),
   getSessionRegistry: () => new Map()
 }))
+vi.mock('./hive/managed', () => ({ ManagedHive: class { launch = mocks.spawn; shutdown = mocks.managedShutdown; list = () => []; has = () => false } }))
 vi.mock('./hive/context', () => ({ readSharedContext: vi.fn(), writeSharedContext: vi.fn() }))
 vi.mock('./sentinel/notify', () => ({ dispatchAlert: vi.fn() }))
 vi.mock('fs', () => ({
@@ -129,7 +132,7 @@ it('cleans up window services before reopening and respects the HIVE enable swit
   expect(mocks.windows).toHaveLength(1)
   expect(vi.getTimerCount()).toBe(1)
 
-  const request = { role: 'builder', workingDir: '/project' }
+  const request = { provider: 'claude-code', role: 'builder', workingDir: '/project', objective: 'Review example' }
   const disabledResult = await mocks.handlers.get(IPC_CHANNELS.HIVE_SPAWN)!(null, request)
   expect(disabledResult).toEqual({ success: false, error: 'HIVE is disabled' })
   expect(mocks.spawn).not.toHaveBeenCalled()
@@ -148,7 +151,7 @@ it('cleans up window services before reopening and respects the HIVE enable swit
   expect(await mocks.handlers.get(IPC_CHANNELS.HIVE_SPAWN)!(null, request)).toEqual({
     success: true
   })
-  expect(mocks.spawn).toHaveBeenCalledWith(request, expect.objectContaining({ enabled: true }))
+  expect(mocks.spawn).toHaveBeenCalledWith(request)
 
   mocks.windows[1].events.get('closed')!()
   expect(vi.getTimerCount()).toBe(0)

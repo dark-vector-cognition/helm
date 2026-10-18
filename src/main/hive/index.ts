@@ -1,4 +1,4 @@
-import { ipcMain, type BrowserWindow } from 'electron'
+import { app, ipcMain, type BrowserWindow } from 'electron'
 import { join } from 'path'
 import { homedir } from 'os'
 import { IPC_CHANNELS } from '../../shared/types'
@@ -10,7 +10,6 @@ import type {
 } from '../../shared/types'
 import { resolveMainAssetPath } from '../app-paths'
 import {
-  spawnHiveAgent,
   killHiveSession,
   listHiveSessions,
   sendToHiveAgent,
@@ -18,6 +17,12 @@ import {
   getSessionRegistry
 } from './spawner'
 import { readSharedContext, writeSharedContext } from './context'
+import { ManagedHive } from './managed'
+import type { AgentInfo } from '../../shared/types'
+
+let managed: ManagedHive | undefined
+let managedError = ''
+let notifyManaged: () => void = () => {}
 
 const BUILT_IN_ROLES: HiveRoleTemplate[] = [
   {
@@ -73,12 +78,26 @@ export function resolveHiveConfig(userConfig?: Partial<HiveConfig>): HiveConfig 
 }
 
 export function setupHiveIPC(mainWindow: BrowserWindow, hiveConfig: HiveConfig): void {
+  notifyManaged = () => {
+    if (!mainWindow.isDestroyed()) mainWindow.webContents.send(IPC_CHANNELS.HIVE_SESSION_UPDATE, managed?.list() ?? [])
+  }
+  try {
+    managed ??= new ManagedHive(join(app.getPath('userData'), 'hive-runs'), join(__dirname, 'hive-worker.js'), () => notifyManaged(), hiveConfig.claudeBinPath)
+  } catch (error) { managedError = error instanceof Error ? error.message : 'Run journal unavailable.' }
+  ipcMain.handle(IPC_CHANNELS.HIVE_LAUNCH_STATE, () => ({ enabled: hiveConfig.enabled }))
+  ipcMain.handle(IPC_CHANNELS.HIVE_RETRY, (_event, id: string) => {
+    if (!hiveConfig.enabled) return { success: false, error: 'HIVE is disabled' }
+    return managed?.retry(id) ?? { success: false, error: managedError }
+  })
+  ipcMain.handle(IPC_CHANNELS.HIVE_REVIEW, (_event, id: string) => managed?.review(id) ?? { success: false, error: managedError })
   ipcMain.handle(IPC_CHANNELS.HIVE_SPAWN, async (_event, request: HiveSpawnRequest) => {
     if (!hiveConfig.enabled) return { success: false, error: 'HIVE is disabled' }
-    return spawnHiveAgent(request, hiveConfig)
+    if (request?.provider) return managed?.launch(request) ?? { success: false, error: managedError }
+    return { success: false, error: 'Choose a provider in the V6 launcher. Legacy terminal launch is disabled.' }
   })
 
   ipcMain.handle(IPC_CHANNELS.HIVE_KILL_SESSION, async (_event, sessionId: string) => {
+    if (managed?.has(sessionId)) return managed.stop(sessionId)
     const result = await killHiveSession(sessionId)
     if (result.success && !mainWindow.isDestroyed()) {
       const sessions = await listHiveSessions(hiveConfig.tmuxSessionPrefix)
@@ -88,10 +107,11 @@ export function setupHiveIPC(mainWindow: BrowserWindow, hiveConfig: HiveConfig):
   })
 
   ipcMain.handle(IPC_CHANNELS.HIVE_LIST_SESSIONS, async () => {
-    return listHiveSessions(hiveConfig.tmuxSessionPrefix)
+    return [...(managed?.list() ?? []), ...await listHiveSessions(hiveConfig.tmuxSessionPrefix)]
   })
 
   ipcMain.handle(IPC_CHANNELS.HIVE_SEND_MESSAGE, async (_event, sessionId: string, message: string) => {
+    if (managed?.has(sessionId)) return { success: false, error: 'Managed objectives are fixed. Launch a new task after review.' }
     return sendToHiveAgent(sessionId, message)
   })
 
@@ -112,6 +132,11 @@ export function setupHiveIPC(mainWindow: BrowserWindow, hiveConfig: HiveConfig):
 }
 
 export function teardownHive(): void {
+  managed?.shutdown()
+  notifyManaged = () => {}
+  ipcMain.removeHandler(IPC_CHANNELS.HIVE_LAUNCH_STATE)
+  ipcMain.removeHandler(IPC_CHANNELS.HIVE_RETRY)
+  ipcMain.removeHandler(IPC_CHANNELS.HIVE_REVIEW)
   ipcMain.removeHandler(IPC_CHANNELS.HIVE_SPAWN)
   ipcMain.removeHandler(IPC_CHANNELS.HIVE_KILL_SESSION)
   ipcMain.removeHandler(IPC_CHANNELS.HIVE_LIST_SESSIONS)
@@ -159,4 +184,14 @@ export function decorateAgentsWithHive(
       }
     }
   }
+}
+
+export function getManagedAgents(): AgentInfo[] {
+  return (managed?.list() ?? []).map((run) => ({
+    id: `hive:${run.id}`, name: `${run.provider} ${run.role}`, type: run.provider!, source: 'state-file',
+    status: run.taskState === 'working' ? 'active' : run.taskState === 'needs-review' ? 'waiting' : run.taskState === 'reviewed' ? 'idle' : 'unknown',
+    pid: run.status === 'running' ? run.pid : undefined, workingDir: run.workingDir,
+    agentId: run.id, hiveSessionId: run.id, hiveRole: run.role, lastHeartbeat: run.lastEventAt,
+    currentAction: run.events?.at(-1)?.message
+  }))
 }
