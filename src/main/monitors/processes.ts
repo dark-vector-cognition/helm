@@ -1,9 +1,11 @@
-import { exec } from 'child_process'
+import { exec, execFile } from 'child_process'
 import { promisify } from 'util'
+import { cpus, totalmem } from 'os'
 import type { ProcessInfo, ProcessGroup } from '../../shared/types'
 import { isWindows } from '../platform'
 
 const execAsync = promisify(exec)
+const execFileAsync = promisify(execFile)
 
 const AGENT_PATTERNS = ['claude', 'codex', 'gemini']
 const SERVICE_PATTERNS = ['postgres', 'redis', 'mysql', 'mongo', 'nginx', 'docker']
@@ -145,38 +147,91 @@ function classifyProcess(proc: ProcessInfo): { groupName: string; type: ProcessG
   return { groupName: 'System', type: 'other' }
 }
 
-const WINDOWS_PS_COMMAND =
-  'powershell.exe -NoProfile -Command "Get-Process | Select-Object Id, ProcessName, CPU, @{N=\'Mem\';E={[math]::Round($_.WorkingSet64/1MB,1)}}, Path, @{N=\'User\';E={try{$p=$_.GetOwner();if($p){$p.User}}catch{\'\'}}} | ConvertTo-Csv -NoTypeInformation"'
+const WINDOWS_PS_SCRIPT = `
+$culture = [Globalization.CultureInfo]::InvariantCulture
+Get-Process | Select-Object Id, ProcessName,
+  @{N='CPU';E={try{$_.TotalProcessorTime.TotalSeconds.ToString('R', $culture)}catch{''}}},
+  @{N='WorkingSetBytes';E={$_.WorkingSet64}}, Path,
+  @{N='User';E={''}},
+  @{N='StartTime';E={try{$_.StartTime.ToUniversalTime().Ticks.ToString($culture)}catch{''}}},
+  @{N='SampleTime';E={([Diagnostics.Stopwatch]::GetTimestamp() / [double][Diagnostics.Stopwatch]::Frequency).ToString('R', $culture)}} |
+  ConvertTo-Csv -NoTypeInformation
+`
 
-export function parseWindowsProcessOutput(output: string): ProcessInfo[] {
-  const lines = output.trim().split('\n')
-  if (lines.length < 2) return []
+interface WindowsCpuSample {
+  cpuSeconds: number
+  sampledAt: number
+  startedAt: string
+  command: string
+}
 
-  return lines
-    .slice(1) // skip CSV header
-    .map((line) => {
-      const trimmed = line.trim()
-      if (!trimmed) return null
+function nonNegativeNumber(value: string): number | null {
+  if (!value?.trim()) return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null
+}
 
-      // Parse CSV: "Id","ProcessName","CPU","Mem","Path","User"
-      // Fields may be quoted and may contain commas inside quotes
-      const fields = parseCSVLine(trimmed)
-      if (fields.length < 4) return null
+export class WindowsProcessSampler {
+  private samples = new Map<number, WindowsCpuSample>()
+  private readonly logicalCpuCount: number
+  private readonly totalMemoryBytes: number
 
-      const pid = parseInt(fields[0], 10)
+  constructor(options: { logicalCpuCount?: number; totalMemoryBytes?: number } = {}) {
+    this.logicalCpuCount = Math.max(1, options.logicalCpuCount ?? cpus().length)
+    this.totalMemoryBytes = Math.max(1, options.totalMemoryBytes ?? totalmem())
+  }
+
+  parse(output: string): ProcessInfo[] {
+    const nextSamples = new Map<number, WindowsCpuSample>()
+    const processes: ProcessInfo[] = []
+    for (const line of output.trim().split('\n').slice(1)) {
+      const fields = parseCSVLine(line.trim())
+      if (fields.length < 8) continue
+
+      const pid = Number(fields[0])
+      // PID 0 is Windows' idle pseudo-process, not an app consuming CPU.
+      if (!Number.isInteger(pid) || pid <= 0) continue
+
       const processName = fields[1] || ''
-      const cpu = parseFloat(fields[2]) || 0
-      const mem = parseFloat(fields[3]) || 0
+      const cpuSeconds = nonNegativeNumber(fields[2])
+      const workingSetBytes = nonNegativeNumber(fields[3]) ?? 0
       const path = fields[4] || ''
       const user = fields[5] || ''
-
+      const startedAt = fields[6]
+      const sampledAt = nonNegativeNumber(fields[7])
       const command = path || processName
       const name = extractProcessName(command || processName)
       const cwd = path ? extractWorkingDir(path) : undefined
+      let cpu = 0
 
-      return { pid, user, cpu, mem, command, name, cwd } as ProcessInfo
-    })
-    .filter((p): p is ProcessInfo => p !== null && !isNaN(p.pid))
+      if (cpuSeconds !== null && sampledAt !== null && startedAt) {
+        const previous = this.samples.get(pid)
+        if (previous && previous.startedAt === startedAt && previous.command === command) {
+          const elapsed = sampledAt - previous.sampledAt
+          const used = cpuSeconds - previous.cpuSeconds
+          // CPU counters are cumulative seconds across all cores. Normalize the
+          // delta to machine capacity; never treat process lifetime as usage.
+          if (elapsed > 0 && used >= 0) {
+            cpu = Math.min(100, (used / elapsed / this.logicalCpuCount) * 100)
+          }
+        }
+        nextSamples.set(pid, { cpuSeconds, sampledAt, startedAt, command })
+      }
+
+      const mem = Math.min(100, (workingSetBytes / this.totalMemoryBytes) * 100)
+      processes.push({ pid, user, cpu, mem, command, name, cwd })
+    }
+    // Missing/exited processes and inaccessible counters must not retain stale baselines.
+    this.samples = nextSamples
+    return processes
+  }
+}
+
+export function parseWindowsProcessOutput(
+  output: string,
+  sampler = new WindowsProcessSampler()
+): ProcessInfo[] {
+  return sampler.parse(output)
 }
 
 function parseCSVLine(line: string): string[] {
@@ -212,11 +267,29 @@ function parseCSVLine(line: string): string[] {
   return fields
 }
 
+const windowsSampler = new WindowsProcessSampler()
+let windowsCollection: Promise<ProcessInfo[]> | undefined
+
+async function collectWindowsProcesses(): Promise<ProcessInfo[]> {
+  const { stdout } = await execFileAsync(
+    'powershell.exe',
+    ['-NoProfile', '-NonInteractive', '-Command', WINDOWS_PS_SCRIPT],
+    { maxBuffer: 10 * 1024 * 1024, timeout: 3500, windowsHide: true }
+  )
+  return windowsSampler.parse(stdout)
+}
+
 export async function getProcesses(): Promise<ProcessInfo[]> {
   try {
     if (isWindows()) {
-      const { stdout } = await execAsync(WINDOWS_PS_COMMAND, { maxBuffer: 10 * 1024 * 1024 })
-      return parseWindowsProcessOutput(stdout)
+      // Refresh and timer ticks can overlap. Share one ordered sample so they
+      // cannot race or overwrite each other's CPU baselines.
+      if (!windowsCollection) {
+        windowsCollection = collectWindowsProcesses().finally(() => {
+          windowsCollection = undefined
+        })
+      }
+      return await windowsCollection
     }
     const { stdout } = await execAsync('ps aux')
     return parseProcessOutput(stdout)
