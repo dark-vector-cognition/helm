@@ -262,6 +262,7 @@ export interface DBSnapshot {
 }
 
 export interface BriefingResult {
+  model?: string
   summary: string
   alerts: BriefingAlert[]
   suggestions: string[]
@@ -610,6 +611,7 @@ export interface HelmConfig {
   monitorInterval: number
   snapshotInterval: number
   lmStudioUrl?: string
+  lmStudioModel?: string
   agentPatterns?: { type: string; displayName: string; patterns: string[] }[]
   agentFeedPaths?: string[]
   logFilePaths?: string[]

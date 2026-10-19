@@ -73,4 +73,15 @@ describe('envKeyWithEndpoint', () => {
       else process.env.LM_STUDIO_URL = saved.url
     }
   })
+
+  it('uses provider environment keys only for their exact authenticated endpoint', () => {
+    const keys = { OPENROUTER_API_KEY: 'router-fixture', DEEPSEEK_API_KEY: 'deepseek-fixture' }
+    expect(envKeyWithEndpoint({ ...keys, LM_STUDIO_URL: 'https://openrouter.ai/api/v1' })).toEqual({ key: 'router-fixture', url: 'https://openrouter.ai/api' })
+    expect(envKeyWithEndpoint({ ...keys, LM_STUDIO_URL: 'https://api.deepseek.com/v1' })).toEqual({ key: 'deepseek-fixture', url: 'https://api.deepseek.com' })
+    for (const url of ['http://openrouter.ai/api', 'https://other.example/api', 'https://openrouter.ai.evil.example/api', 'http://localhost:1234']) {
+      expect(envKeyWithEndpoint({ ...keys, LM_STUDIO_URL: url })).toBeUndefined()
+    }
+    expect(envKeyWithEndpoint({ ...keys, LLM_API_KEY: 'explicit-fixture', LM_STUDIO_URL: 'https://openrouter.ai/api' })?.key).toBe('explicit-fixture')
+  })
+
 })

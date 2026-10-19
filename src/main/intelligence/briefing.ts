@@ -7,12 +7,14 @@ import {
   NO_MODEL_MESSAGE
 } from './lmstudio'
 
-export function buildBriefingPrompt(state: SystemState): string {
+export function buildBriefingPrompt(state: SystemState, resourcesOnly = false): string {
   const sections: string[] = []
 
   sections.push(
     `## System Resources\n- CPU: ${state.cpu.usage.toFixed(1)}% across ${state.cpu.cores} cores\n- Memory: ${state.memory.usagePercent.toFixed(1)}% used (${(state.memory.used / 1e9).toFixed(1)}GB / ${(state.memory.total / 1e9).toFixed(1)}GB)`
   )
+
+  if (resourcesOnly) return sections.join('\n\n')
 
   if (state.processes.length > 0) {
     const procLines = state.processes.map((g) => {
@@ -125,7 +127,6 @@ export function buildNoModelBriefing(timestamp = Date.now()): BriefingResult {
 }
 
 export async function generateBriefing(state: SystemState): Promise<BriefingResult> {
-  const prompt = buildBriefingPrompt(state)
   const connection = await healLmStudioConnection({ persist: true })
 
   if (!connection.success || !connection.url) {
@@ -146,6 +147,8 @@ export async function generateBriefing(state: SystemState): Promise<BriefingResu
   }
 
   try {
+    const hosted = ['openrouter.ai', 'api.deepseek.com'].includes(new URL(connection.url).hostname)
+    const prompt = buildBriefingPrompt(state, hosted)
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 120000)
 
@@ -172,8 +175,10 @@ export async function generateBriefing(state: SystemState): Promise<BriefingResu
     }
 
     const data = await response.json()
-    const text = data.choices?.[0]?.message?.content || 'No response generated.'
+    const text = data.choices?.[0]?.message?.content
+    if (typeof text !== 'string' || !text.trim()) throw new Error('The model returned no briefing text. Retry the request.')
     const result = parseBriefingResponse(text)
+    result.model = typeof data.model === 'string' ? data.model : connection.model
 
     if (connection.repaired && connection.previousUrl) {
       result.alerts = [
