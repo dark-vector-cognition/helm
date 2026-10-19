@@ -28,6 +28,9 @@ jobs:
       - name: Rebuild better-sqlite3 for Node
         run: npm run rebuild:node
 
+      - name: Test Cursor hook adapter
+        run: npm run test:agent-hooks
+
       - name: Run tests
         run: npx vitest --run
 

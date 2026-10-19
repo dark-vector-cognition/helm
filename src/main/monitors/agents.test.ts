@@ -102,6 +102,55 @@ describe('detectAgents', () => {
     expect(agents).toHaveLength(1)
     expect(agents[0].type).toBe('cursor')
     expect(agents[0].name).toBe('Cursor')
+    expect(agents[0].status).toBe('unknown')
+  })
+
+  it.each([
+    '/Applications/Cursor.app/Contents/Frameworks/Cursor Helper (Renderer).app/Contents/MacOS/Cursor Helper (Renderer) --type=renderer',
+    '/Applications/Cursor.app/Contents/Frameworks/Cursor Helper.app/Contents/MacOS/Cursor Helper --type=gpu-process',
+    '/Applications/Cursor.app/Contents/Frameworks/Cursor Helper (Plugin).app/Contents/MacOS/Cursor Helper (Plugin) --type=utility',
+    '/Applications/Cursor.app/Contents/Frameworks/Electron Framework.framework/Helpers/chrome_crashpad_handler',
+    '/Applications/Cursor.app/Contents/MacOS/cursor --type gpu-process'
+  ])('excludes the Cursor helper %s while retaining the main app', (command) => {
+    const procs: ProcessInfo[] = [
+      { pid: 1, user: 'test', cpu: 8, mem: 1, command: '/Applications/Cursor.app/Contents/MacOS/cursor', name: 'cursor' },
+      { pid: 2, user: 'test', cpu: 90, mem: 1, command, name: 'cursor' }
+    ]
+
+    const agents = detectAgents(procs)
+
+    expect(agents).toHaveLength(1)
+    expect(agents[0]).toMatchObject({ pid: 1, type: 'cursor', status: 'unknown' })
+  })
+
+  it.each(['cursor-agent --print', '/usr/local/bin/cursor-agent --print'])('detects the explicit Cursor CLI %s', (command) => {
+    const procs: ProcessInfo[] = [
+      { pid: 1, user: 'test', cpu: 10, mem: 1, command, name: 'cursor-agent' }
+    ]
+
+    expect(detectAgents(procs)).toMatchObject([{ pid: 1, type: 'cursor', status: 'unknown' }])
+  })
+
+  it.each([
+    '/usr/local/bin/agent --task build',
+    '/usr/bin/python agent.py',
+    'echo cursor-agent',
+    'node /projects/cursor-agent/server.js',
+    '/usr/local/bin/cursor-agent-tool'
+  ])('does not mistake unrelated command %s for Cursor CLI', (command) => {
+    expect(detectAgents([
+      { pid: 1, user: 'test', cpu: 10, mem: 1, command, name: 'agent' }
+    ])).toEqual([])
+  })
+
+  it('preserves deduplication without inferring task activity from CPU', () => {
+    const procs: ProcessInfo[] = [
+      { pid: 1, user: 'test', cpu: 0, mem: 1, command: 'cursor-agent', name: 'cursor-agent', cwd: '/projects/example' },
+      { pid: 2, user: 'test', cpu: 30, mem: 1, command: 'cursor-agent --print', name: 'cursor-agent', cwd: '/projects/example' }
+    ]
+
+    expect(detectAgents(procs)).toMatchObject([{ pid: 2, type: 'cursor', status: 'unknown' }])
+    expect(detectAgents(procs)).toHaveLength(1)
   })
 
   it('identifies Aider processes', () => {
@@ -367,43 +416,30 @@ describe('detectAgents', () => {
     expect(agents[0].name).toBe('Copilot')
   })
 
-  it('returns active status for CPU > 5%', () => {
+  it.each([0, 0.5, 1, 3, 5.1, 10, 100])('keeps task state unknown at CPU %s%%', (cpu) => {
     const procs: ProcessInfo[] = [
-      { pid: 100, user: 'test', cpu: 10, mem: 1, command: '/usr/local/bin/claude', name: 'claude' }
+      { pid: 100, user: 'test', cpu, mem: 1, command: '/usr/local/bin/claude', name: 'claude' }
     ]
+
     const agents = detectAgents(procs)
-    expect(agents[0].status).toBe('active')
+
+    expect(agents[0].status).toBe('unknown')
+    expect(agents[0].source).toBe('process')
+    expect(procs[0].cpu).toBe(cpu)
   })
 
-  it('returns busy status for CPU > 1% and <= 5%', () => {
-    const procs: ProcessInfo[] = [
-      { pid: 101, user: 'test', cpu: 3, mem: 1, command: '/usr/local/bin/claude', name: 'claude' }
+  it('keeps every detected provider task state unknown', () => {
+    const commands = [
+      'claude', 'codex', 'gemini', 'cursor', 'aider',
+      '/extensions/.continue/server', '/usr/lib/github-copilot/copilot-agent'
     ]
-    const agents = detectAgents(procs)
-    expect(agents[0].status).toBe('busy')
-  })
+    const procs = commands.map((command, index) => ({
+      pid: index + 100, user: 'test', cpu: 30, mem: 1, command, name: command
+    }))
 
-  it('returns idle status for CPU <= 1%', () => {
-    const procs: ProcessInfo[] = [
-      { pid: 102, user: 'test', cpu: 0.5, mem: 1, command: '/usr/local/bin/claude', name: 'claude' }
-    ]
     const agents = detectAgents(procs)
-    expect(agents[0].status).toBe('idle')
-  })
 
-  it('returns idle status for CPU exactly 1%', () => {
-    const procs: ProcessInfo[] = [
-      { pid: 103, user: 'test', cpu: 1, mem: 1, command: '/usr/local/bin/claude', name: 'claude' }
-    ]
-    const agents = detectAgents(procs)
-    expect(agents[0].status).toBe('idle')
-  })
-
-  it('returns active status for CPU exactly 5.1%', () => {
-    const procs: ProcessInfo[] = [
-      { pid: 104, user: 'test', cpu: 5.1, mem: 1, command: '/usr/local/bin/claude', name: 'claude' }
-    ]
-    const agents = detectAgents(procs)
-    expect(agents[0].status).toBe('active')
+    expect(agents).toHaveLength(7)
+    expect(agents.every((agent) => agent.status === 'unknown')).toBe(true)
   })
 })

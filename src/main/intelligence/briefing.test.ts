@@ -79,7 +79,15 @@ describe('buildBriefingPrompt', () => {
   it('should include agent info', () => {
     const prompt = buildBriefingPrompt(mockState)
     expect(prompt).toContain('claude-code')
-    expect(prompt).toContain('active')
+    expect(prompt).toContain('task status unknown (process presence only)')
+  })
+
+  it('keeps reported feed state distinct from process evidence', () => {
+    const prompt = buildBriefingPrompt({ ...mockState, agents: [
+      { ...mockState.agents[0], source: 'state-file', status: 'waiting' }
+    ] })
+    expect(prompt).toContain('waiting (agent state feed)')
+    expect(prompt).not.toContain('process presence only')
   })
 
   it('should include git status', () => {

@@ -82,6 +82,8 @@ export function ScorecardsStrip(): JSX.Element {
   const totalAgents = state?.agents.length ?? 0
   const engagedAgents =
     state?.agents.filter((a) => a.status === 'active' || a.status === 'busy').length ?? 0
+  const unknownAgents = state?.agents.filter((a) => a.status === 'unknown').length ?? 0
+  const waitingAgents = state?.agents.filter((a) => a.status === 'waiting').length ?? 0
   const listenPorts = state?.ports.filter((p) => p.state === 'LISTEN').length ?? 0
   const dirtyRepos = state?.gitRepos.filter((r) => r.dirty).length ?? 0
   const totalRepos = state?.gitRepos.length ?? 0
@@ -121,7 +123,7 @@ export function ScorecardsStrip(): JSX.Element {
       <Scorecard
         key="agents"
         value={`${totalAgents}`}
-        label={engagedAgents > 0 ? `Agents • ${engagedAgents} hot` : 'Agents • idle'}
+        label={engagedAgents > 0 ? `Agents • ${engagedAgents} active` : unknownAgents > 0 ? 'Agents • unknown' : waitingAgents > 0 ? `Agents • ${waitingAgents} waiting` : totalAgents > 0 ? 'Agents • reported idle' : 'Agents • none'}
         color={engagedAgents > 0 ? 'green' : 'blue'}
         size="compact"
         onClick={() => setCurrentPage('swarm')}

@@ -83,7 +83,7 @@ Operator walkthrough: [docs/OPERATOR-WALKTHROUGH.md](docs/OPERATOR-WALKTHROUGH.m
 
 - **Bridge** surfaces health, hotspots, command center, and the compact AI briefing
 - **Fleet** handles repo drift, process orchestration, git status, and commit history
-- **Swarm** tracks active agent processes, cadence, coordination load, and per-agent drill-down, and launches HIVE agents (analyst, architect, builder, ops)
+- **Swarm** discovers supported agent processes and shows task state from fresh agent reports. CPU use does not establish task state. See [agent support and Cursor setup](docs/AGENT-SUPPORT.md). HIVE can launch agents (analyst, architect, builder, ops)
 - **Grid** exposes listening ports and scoped traffic topology
 - **AI** centralizes the optional model connection, briefing requests, and Claude Code usage tracking
 - **Vault** searches and browses an Obsidian vault through a local or remote vault-rag server, and can push notes into it

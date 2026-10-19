@@ -24,7 +24,7 @@ export function buildBriefingPrompt(state: SystemState): string {
 
   if (state.agents.length > 0) {
     const agentLines = state.agents.map(
-      (a) => `- ${a.name} (${a.type}): ${a.status}${a.workingDir ? ` in ${a.workingDir}` : ''}`
+      (a) => `- ${a.name} (${a.type}): ${a.source === 'process' ? 'task status unknown (process presence only)' : `${a.status} (agent state feed)`}${a.workingDir ? ` in ${a.workingDir}` : ''}`
     )
     sections.push(`## AI Agents\n${agentLines.join('\n')}`)
   }
@@ -109,7 +109,8 @@ Rules:
 - CPU > 80% = warning. CPU > 95% = critical.
 - Memory > 85% = warning. Memory > 95% = critical.
 - Dirty git repos with uncommitted changes for context = info suggestion.
-- Agent in "waiting" status for extended time = warning.`
+- An agent-reported "waiting" status can need operator attention.
+- Process presence or CPU use does not establish task status, progress or completion. Unknown task status is not idle or waiting.`
 
 /** The model is optional. With no endpoint configured this is a normal, quiet state, not a failure. */
 export function buildNoModelBriefing(timestamp = Date.now()): BriefingResult {

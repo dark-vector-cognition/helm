@@ -55,7 +55,7 @@ describe('agent feed monitor', () => {
     expect(agent?.uptime).toBe(6 * 60 * 1000)
   })
 
-  it('marks stale heartbeats as waiting or unknown', () => {
+  it('marks stale heartbeats unknown instead of inventing a waiting task', () => {
     const waiting = parseAgentState(
       JSON.stringify({
         agent_id: 'ticker',
@@ -73,8 +73,46 @@ describe('agent feed monitor', () => {
       Date.parse('2026-03-07T00:12:00Z')
     )
 
-    expect(waiting?.status).toBe('waiting')
+    expect(waiting?.status).toBe('unknown')
     expect(unknown?.status).toBe('unknown')
+  })
+
+  it.each(['active', 'busy', 'idle', 'waiting', 'unknown'])(
+    'preserves explicit %s status only with a fresh heartbeat', (status) => {
+      const agent = parseAgentState(JSON.stringify({
+        agent_id: 'custom-reviewer', status, last_heartbeat: 1000
+      }), '/tmp/custom.state.json', 1100)
+      expect(agent?.status).toBe(status)
+      expect(agent?.type).toBe('other')
+    }
+  )
+
+  it.each([
+    { status: 'active' },
+    { current_action: 'A previous task', last_heartbeat: 1000 },
+    { status: 'invalid', last_heartbeat: 1000 },
+    { status: 'active', last_heartbeat: 2000 },
+    { status: 'waiting', last_heartbeat: -120000 }
+  ])('keeps missing, invalid, future or stale task evidence unknown: %j', (fields) => {
+    const agent = parseAgentState(JSON.stringify({ agent_id: 'cursor-review', ...fields }),
+      '/tmp/cursor.state.json', 1100)
+    expect(agent?.status).toBe('unknown')
+  })
+
+  it('does not mistake a tool mentioned in task text for the agent provider', () => {
+    const agent = parseAgentState(JSON.stringify({ agent_id: 'custom-reviewer',
+      status: 'busy', last_heartbeat: 1000, current_action: 'Inspect Cursor and Codex output'
+    }), '/tmp/custom.state.json', 1100)
+    expect(agent?.type).toBe('other')
+  })
+
+  it('keeps a readable label separate from the stable feed identity', () => {
+    const agent = parseAgentState(JSON.stringify({ agent_id: 'cursor-abcdef012345',
+      display_name: 'Cursor session abcdef', status: 'idle', last_heartbeat: 1000
+    }), '/tmp/cursor.state.json', 1100)
+    expect(agent?.id).toBe('agent:cursor-abcdef012345')
+    expect(agent?.name).toBe('Cursor session abcdef')
+    expect(agent?.type).toBe('cursor')
   })
 
   it('maps external trace actions into timeline events', () => {
