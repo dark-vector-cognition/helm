@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react'
 import { useRadioStore } from '../stores/radio'
 import { useSystemStore } from '../stores/system'
+import { useSkinStore } from '../stores/skin'
+import { startVisualAnimation, type VisualAnimation } from './visual-motion'
 import { FM_STATIONS } from '../panels/fm-stations'
 import { RADIO_HOME_CHANGED_EVENT, homePoint } from '../stores/radio-home'
 
@@ -81,7 +83,8 @@ interface ArcDef { from: [number, number]; to: [number, number]; color: string }
 
 export function SkinGlobe(): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const rafRef = useRef(0)
+  const animationRef = useRef<VisualAnimation | null>(null)
+  const activeSkin = useSkinStore((s) => s.activeSkin)
   const homeRef = useRef<[number, number] | null>(null)
   const dataRef = useRef<{ stationId: string; hasActiveAgent: boolean }>({
     stationId: '', hasActiveAgent: false
@@ -102,10 +105,16 @@ export function SkinGlobe(): JSX.Element {
       window.helm
         .getConfig()
         .then((config) => {
-          if (active) homeRef.current = homePoint(config.radioHomeLocation)
+          if (active) {
+            homeRef.current = homePoint(config.radioHomeLocation)
+            animationRef.current?.redraw()
+          }
         })
         .catch(() => {
-          if (active) homeRef.current = null
+          if (active) {
+            homeRef.current = null
+            animationRef.current?.redraw()
+          }
         })
     }
     load()
@@ -123,29 +132,29 @@ export function SkinGlobe(): JSX.Element {
     const setupSize = (): void => {
       const parent = canvas.parentElement
       if (!parent) return
-      const dpr = window.devicePixelRatio || 1
+      const dpr = Math.min(window.devicePixelRatio || 1, 2)
       const w = parent.clientWidth
       canvas.width = w * dpr
       canvas.height = 200 * dpr
       canvas.style.width = `${w}px`
       canvas.style.height = '200px'
+      animationRef.current?.redraw()
     }
     setupSize()
-    window.addEventListener('resize', setupSize)
+    const observer = new ResizeObserver(setupSize)
+    if (canvas.parentElement) observer.observe(canvas.parentElement)
+    const ctx = canvas.getContext('2d')
+    if (!ctx) { observer.disconnect(); return }
+    const accent = getComputedStyle(canvas).getPropertyValue('--helm-accent').trim() || '#d8ef8a'
 
-    function loop(): void {
-      if (!canvas) return
-      const ctx = canvas.getContext('2d')
-      if (!ctx) return
-
-      const dpr = window.devicePixelRatio || 1
+    const draw = (time: number): void => {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2)
       const w = canvas.width / dpr
       const h = canvas.height / dpr
-      const time = performance.now() / 1000
       const cx = w / 2
       const cy = h / 2
       const r = Math.min(cx, cy) * 0.78
-      const rot = time * (TAU / 60)
+      const rot = 1.3 + time * (TAU / 60)
       const user = homeRef.current
 
       ctx.clearRect(0, 0, canvas.width, canvas.height)
@@ -155,11 +164,12 @@ export function SkinGlobe(): JSX.Element {
       // Globe body
       ctx.beginPath()
       ctx.arc(cx, cy, r, 0, TAU)
-      ctx.fillStyle = 'rgba(20,16,10,0.6)'
+      ctx.fillStyle = 'rgba(19,24,21,0.8)'
       ctx.fill()
 
       // Grid
-      ctx.strokeStyle = 'rgba(200,170,110,0.08)'
+      ctx.strokeStyle = accent
+      ctx.globalAlpha = 0.1
       ctx.lineWidth = 0.5
       for (let lat = -60; lat <= 60; lat += 30) {
         ctx.beginPath()
@@ -185,19 +195,22 @@ export function SkinGlobe(): JSX.Element {
       // Rim
       ctx.beginPath()
       ctx.arc(cx, cy, r, 0, TAU)
-      ctx.strokeStyle = 'rgba(200,170,110,0.2)'
+      ctx.globalAlpha = 0.3
+      ctx.strokeStyle = accent
       ctx.lineWidth = 1
       ctx.stroke()
+
+      ctx.globalAlpha = 1
 
       // Arcs
       const arcs: ArcDef[] = []
       if (user) {
         const rk = stationLocationKey(dataRef.current.stationId)
         if (rk && KNOWN_LOCATIONS[rk]) {
-          arcs.push({ from: KNOWN_LOCATIONS[rk], to: user, color: 'rgba(255,210,130,0.55)' })
+          arcs.push({ from: KNOWN_LOCATIONS[rk], to: user, color: accent })
         }
         if (dataRef.current.hasActiveAgent) {
-          arcs.push({ from: KNOWN_LOCATIONS.anthropic, to: user, color: 'rgba(255,170,90,0.55)' })
+          arcs.push({ from: KNOWN_LOCATIONS.anthropic, to: user, color: '#6ed9c4' })
         }
       }
 
@@ -235,24 +248,28 @@ export function SkinGlobe(): JSX.Element {
         const pulse = 0.5 + Math.sin(time * 3) * 0.5
         ctx.beginPath()
         ctx.arc(up.x, up.y, 3 + pulse * 2, 0, TAU)
-        ctx.fillStyle = `rgba(255,210,130,${(0.15 + pulse * 0.15).toFixed(2)})`
+        ctx.fillStyle = accent
+        ctx.globalAlpha = 0.15 + pulse * 0.15
         ctx.fill()
         ctx.beginPath()
         ctx.arc(up.x, up.y, 3, 0, TAU)
-        ctx.fillStyle = 'rgb(255,210,130)'
+        ctx.globalAlpha = 1
+        ctx.fillStyle = accent
         ctx.fill()
       }
 
       ctx.restore()
-      rafRef.current = requestAnimationFrame(loop)
     }
 
-    rafRef.current = requestAnimationFrame(loop)
+    animationRef.current = startVisualAnimation(canvas, draw, () => false)
     return () => {
-      cancelAnimationFrame(rafRef.current)
-      window.removeEventListener('resize', setupSize)
+      animationRef.current?.dispose()
+      animationRef.current = null
+      observer.disconnect()
     }
-  }, [])
+  }, [activeSkin])
 
-  return <canvas ref={canvasRef} className="shell-skin-globe" />
+  useEffect(() => animationRef.current?.redraw(), [stationId, dataRef.current.hasActiveAgent])
+
+  return <canvas ref={canvasRef} className="shell-skin-globe" aria-hidden="true" />
 }

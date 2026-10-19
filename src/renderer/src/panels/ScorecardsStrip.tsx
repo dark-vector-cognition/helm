@@ -123,8 +123,8 @@ export function ScorecardsStrip(): JSX.Element {
       <Scorecard
         key="agents"
         value={`${totalAgents}`}
-        label={engagedAgents > 0 ? `Agents • ${engagedAgents} active` : unknownAgents > 0 ? 'Agents • unknown' : waitingAgents > 0 ? `Agents • ${waitingAgents} waiting` : totalAgents > 0 ? 'Agents • reported idle' : 'Agents • none'}
-        color={engagedAgents > 0 ? 'green' : 'blue'}
+        label={waitingAgents > 0 ? `Agents • ${waitingAgents} waiting` : engagedAgents > 0 ? `Agents • ${engagedAgents} active` : unknownAgents > 0 ? 'Agents • unknown' : totalAgents > 0 ? 'Agents • reported idle' : 'Agents • none'}
+        color={waitingAgents > 0 ? 'amber' : engagedAgents > 0 ? 'green' : 'blue'}
         size="compact"
         onClick={() => setCurrentPage('swarm')}
       />
