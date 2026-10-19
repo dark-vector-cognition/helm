@@ -1,29 +1,31 @@
 import { useEffect, useState } from 'react'
 import { useHiveStore } from '../stores/hive'
 import { useSystemStore } from '../stores/system'
-import type { HiveRoleName, HiveModel } from '../../../shared/types'
+import { redactSensitiveText, usePrivacyStore } from '../stores/privacy'
+import type {
+  HiveRoleName,
+  HiveModel,
+  HiveProvider,
+  HivePermissionMode
+} from '../../../shared/types'
 
-const BUILT_IN_ROLES: { name: HiveRoleName; displayName: string; model: HiveModel; description: string }[] = [
-  { name: 'architect', displayName: 'Architect', model: 'opus', description: 'System design and planning' },
-  { name: 'builder', displayName: 'Builder', model: 'sonnet', description: 'Implementation and code' },
-  { name: 'analyst', displayName: 'Analyst', model: 'sonnet', description: 'Research and data analysis' },
-  { name: 'ops', displayName: 'Ops', model: 'sonnet', description: 'Infrastructure and automation' }
+const ROLES: HiveRoleName[] = ['architect', 'builder', 'analyst', 'ops']
+const PROVIDERS: { id: HiveProvider; name: string }[] = [
+  { id: 'claude-code', name: 'Claude Code' },
+  { id: 'cursor', name: 'Cursor' },
+  { id: 'codex', name: 'Codex' }
 ]
-
-const MODEL_OPTIONS: HiveModel[] = ['opus', 'sonnet', 'haiku']
-
-const ROLE_COLORS: Record<string, string> = {
-  architect: 'text-violet-400',
-  builder: 'text-emerald-400',
-  analyst: 'text-blue-400',
-  ops: 'text-orange-400'
-}
+const ACTIVE = new Set(['starting', 'working', 'stopping'])
+const RETRYABLE = new Set(['failed', 'stopped', 'interrupted'])
 
 export function HiveLauncher(): JSX.Element {
   const sessions = useHiveStore((s) => s.sessions)
+  const enabled = useHiveStore((s) => s.enabled)
   const loading = useHiveStore((s) => s.loading)
   const error = useHiveStore((s) => s.error)
   const spawn = useHiveStore((s) => s.spawn)
+  const retry = useHiveStore((s) => s.retry)
+  const review = useHiveStore((s) => s.review)
   const killSession = useHiveStore((s) => s.killSession)
   const attach = useHiveStore((s) => s.attach)
   const refresh = useHiveStore((s) => s.refresh)
@@ -31,228 +33,447 @@ export function HiveLauncher(): JSX.Element {
   const updateContext = useHiveStore((s) => s.updateContext)
   const getContext = useHiveStore((s) => s.getContext)
   const state = useSystemStore((s) => s.state)
+  const privacyMode = usePrivacyStore((s) => s.privacyMode)
+  const display = (value: string): string => (privacyMode ? redactSensitiveText(value) : value)
 
-  const [selectedRole, setSelectedRole] = useState<HiveRoleName>('architect')
-  const [selectedModel, setSelectedModel] = useState<HiveModel>('opus')
+  const [provider, setProvider] = useState<HiveProvider>('claude-code')
+  const [role, setRole] = useState<HiveRoleName>('architect')
+  const [model, setModel] = useState<HiveModel | ''>('')
+  const [permissionMode, setPermissionMode] = useState<HivePermissionMode>('read-only')
   const [workingDir, setWorkingDir] = useState('')
   const [objective, setObjective] = useState('')
+  const [confirmed, setConfirmed] = useState(false)
   const [contextText, setContextText] = useState('')
   const [contextExpanded, setContextExpanded] = useState(false)
   const [confirmKill, setConfirmKill] = useState<string | null>(null)
+  const [confirmRetry, setConfirmRetry] = useState<string | null>(null)
 
-  useEffect(() => {
-    initialize()
-  }, [initialize])
+  useEffect(() => initialize(), [initialize])
 
-  useEffect(() => {
-    const role = BUILT_IN_ROLES.find((r) => r.name === selectedRole)
-    if (role) setSelectedModel(role.model)
-  }, [selectedRole])
-
-  // Repo path suggestions
   const repoPaths = state?.gitRepos.map((r) => r.path) ?? []
+  const activeCount = sessions.filter((s) =>
+    s.taskState ? ACTIVE.has(s.taskState) : s.status === 'running'
+  ).length
+  const canLaunch = enabled && !loading && confirmed && !!workingDir.trim() && !!objective.trim()
+  const fieldClass =
+    'w-full min-w-0 bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-white placeholder-white/30 focus:outline-none focus:border-white/40'
+  const actionClass =
+    'rounded border border-white/15 px-2 py-1 text-xs text-cyan-300 hover:bg-white/5 disabled:opacity-40 disabled:cursor-not-allowed'
 
   async function handleLaunch(): Promise<void> {
-    if (!workingDir.trim()) return
-    await spawn({
-      role: selectedRole,
-      model: selectedModel,
+    if (!canLaunch) return
+    const result = await spawn({
+      provider,
+      role,
+      permissionMode,
       workingDir: workingDir.trim(),
-      objective: objective.trim() || undefined
+      objective: objective.trim(),
+      timeoutSeconds: 120,
+      ...(provider === 'claude-code' && model ? { model } : {})
     })
-    setObjective('')
+    if (result.success) {
+      setObjective('')
+      setConfirmed(false)
+    }
   }
-
-  async function handleLoadContext(): Promise<void> {
-    const ctx = await getContext()
-    setContextText(ctx)
-    setContextExpanded(true)
-  }
-
-  async function handlePushContext(): Promise<void> {
-    if (!contextText.trim()) return
-    await updateContext(contextText.trim())
-  }
-
-  const activeSessions = sessions.filter((s) => s.status === 'running')
-  const selectClass = 'bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-white/25 appearance-none'
-  const inputClass = 'w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-white placeholder-white/30 focus:outline-none focus:border-white/25'
 
   return (
-    <div className="space-y-3">
-      {/* Summary line */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-amber-400 text-xs font-semibold uppercase tracking-wider">HIVE</span>
-          <span className="text-[10px] text-gray-500">
-            {activeSessions.length > 0
-              ? `${activeSessions.length} agent${activeSessions.length === 1 ? '' : 's'} running`
-              : 'No agents running'}
+    <div className="space-y-3 min-w-0">
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <span className="text-amber-400 text-xs font-semibold uppercase tracking-wider">
+            HIVE
+          </span>
+          <span className="ml-2 text-[10px] text-gray-400">
+            {activeCount} running · {sessions.length} recorded
           </span>
         </div>
         <button
           type="button"
-          onClick={refresh}
-          className="text-[10px] text-gray-500 hover:text-gray-300"
+          onClick={() => {
+            void refresh()
+          }}
+          className={actionClass}
         >
           Refresh
         </button>
       </div>
 
-      {/* Active sessions */}
-      {activeSessions.length > 0 && (
-        <div className="space-y-1">
-          {activeSessions.map((session) => (
-            <div
-              key={session.id}
-              className="flex items-center gap-2 rounded border border-white/8 bg-black/25 px-2 py-1.5"
-            >
-              <span className={`text-xs font-semibold ${ROLE_COLORS[session.role] ?? 'text-gray-400'}`}>
-                {session.role}
-              </span>
-              <span className="text-[10px] text-gray-500 truncate flex-1" title={session.workingDir}>
-                {session.workingDir.split('/').pop()}
-              </span>
-              <span className="text-[10px] text-gray-600 font-mono">{session.model}</span>
-              <button
-                type="button"
-                onClick={() => attach(session.id)}
-                className="text-[10px] text-cyan-400 hover:text-cyan-300"
-                title="Attach to tmux session"
-              >
-                Attach
-              </button>
-              {confirmKill === session.id ? (
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => { killSession(session.id); setConfirmKill(null) }}
-                    className="text-[10px] text-red-400 hover:text-red-300"
-                  >
-                    Confirm
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setConfirmKill(null)}
-                    className="text-[10px] text-gray-500"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setConfirmKill(session.id)}
-                  className="text-[10px] text-red-400/60 hover:text-red-400"
-                  title="Kill session"
-                >
-                  Kill
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
+      {!enabled && (
+        <p role="status" className="rounded border border-amber-700/40 p-2 text-xs text-amber-300">
+          Agent launch is disabled. Set HELM_HIVE_ENABLED=true in your configuration, then restart
+          Helm.
+        </p>
+      )}
+      {error && (
+        <p role="alert" className="break-words text-xs text-red-300">
+          {display(error)}
+        </p>
       )}
 
-      {/* Launch controls */}
-      <div className="rounded border border-white/8 bg-black/20 p-3 space-y-2">
-        <div className="text-[9px] uppercase tracking-[0.16em] text-gray-500 mb-2">Launch Agent</div>
-
-        <div className="grid grid-cols-2 gap-2">
-          <select
-            value={selectedRole}
-            onChange={(e) => setSelectedRole(e.target.value)}
-            className={selectClass}
-          >
-            {BUILT_IN_ROLES.map((role) => (
-              <option key={role.name} value={role.name}>
-                {role.displayName}
-              </option>
-            ))}
-            <option value="custom">Custom...</option>
-          </select>
-
-          <select
-            value={selectedModel}
-            onChange={(e) => setSelectedModel(e.target.value as HiveModel)}
-            className={selectClass}
-          >
-            {MODEL_OPTIONS.map((m) => (
-              <option key={m} value={m}>{m}</option>
-            ))}
-          </select>
-        </div>
-
-        <div className="relative">
-          <input
-            value={workingDir}
-            onChange={(e) => setWorkingDir(e.target.value)}
-            placeholder="Working directory..."
-            className={inputClass}
-            list="hive-repo-paths"
-          />
-          <datalist id="hive-repo-paths">
-            {repoPaths.map((p) => (
-              <option key={p} value={p} />
-            ))}
-          </datalist>
-        </div>
-
-        <input
-          value={objective}
-          onChange={(e) => setObjective(e.target.value)}
-          placeholder="Objective (optional)..."
-          className={inputClass}
-        />
-
-        <button
-          type="button"
-          onClick={handleLaunch}
-          disabled={loading || !workingDir.trim()}
-          className={`w-full py-1.5 rounded text-xs font-semibold transition-colors ${
-            loading || !workingDir.trim()
-              ? 'bg-white/5 border border-white/10 text-white/30 cursor-not-allowed'
-              : 'bg-amber-950/40 border border-amber-700/40 text-amber-400 hover:bg-amber-950/60'
-          }`}
-        >
-          {loading ? 'Launching...' : 'Launch'}
-        </button>
-
-        {error && (
-          <div className="text-[10px] text-red-400">{error}</div>
-        )}
-      </div>
-
-      {/* Shared context */}
-      <div className="rounded border border-white/8 bg-black/20 p-2">
-        <button
-          type="button"
-          onClick={contextExpanded ? () => setContextExpanded(false) : handleLoadContext}
-          className="w-full flex items-center justify-between text-[9px] uppercase tracking-[0.16em] text-gray-500"
-        >
-          <span>Shared Context</span>
-          <span>{contextExpanded ? '\u25B2' : '\u25BC'}</span>
-        </button>
-
-        {contextExpanded && (
-          <div className="mt-2 space-y-2">
-            <textarea
-              value={contextText}
-              onChange={(e) => setContextText(e.target.value)}
-              rows={6}
-              className="w-full bg-black/30 border border-white/8 rounded p-2 text-xs text-gray-300 font-mono resize-none focus:outline-none focus:border-white/20"
-              placeholder="# HIVE Shared Context..."
-            />
-            <button
-              type="button"
-              onClick={handlePushContext}
-              className="px-3 py-1 rounded text-[10px] font-semibold bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:border-white/20 transition-colors"
+      <div className="rounded border border-white/10 bg-black/20 p-3 space-y-3">
+        <h3 className="text-xs font-semibold text-gray-200">Launch an agent</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <label className="text-xs text-gray-400">
+            Provider
+            <select
+              aria-label="Agent provider"
+              value={provider}
+              onChange={(e) => {
+                setProvider(e.target.value as HiveProvider)
+                setConfirmed(false)
+              }}
+              className={fieldClass}
             >
-              Push Context
-            </button>
-          </div>
-        )}
+              {PROVIDERS.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-xs text-gray-400">
+            Role
+            <select
+              aria-label="Agent role"
+              value={role}
+              onChange={(e) => {
+                setRole(e.target.value)
+                setConfirmed(false)
+              }}
+              className={fieldClass}
+            >
+              {ROLES.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </label>
+          {provider === 'claude-code' && (
+            <label className="text-xs text-gray-400">
+              Model
+              <select
+                aria-label="Agent model"
+                value={model}
+                onChange={(e) => {
+                  setModel(e.target.value as HiveModel | '')
+                  setConfirmed(false)
+                }}
+                className={fieldClass}
+              >
+                <option value="">Provider default</option>
+                {(['opus', 'sonnet', 'haiku'] as const).map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <label className="text-xs text-gray-400">
+            Permissions
+            <select
+              aria-label="Agent permissions"
+              value={permissionMode}
+              onChange={(e) => {
+                setPermissionMode(e.target.value as HivePermissionMode)
+                setConfirmed(false)
+              }}
+              className={fieldClass}
+            >
+              <option value="read-only">Read only</option>
+              <option value="workspace-write">Workspace write</option>
+            </select>
+          </label>
+        </div>
+        <label className="block text-xs text-gray-400">
+          Working directory
+          <input
+            aria-label="Agent working directory"
+            type={privacyMode ? 'password' : 'text'}
+            autoComplete="off"
+            value={workingDir}
+            onChange={(e) => {
+              setWorkingDir(e.target.value)
+              setConfirmed(false)
+            }}
+            placeholder="Absolute workspace path"
+            className={fieldClass}
+            list={privacyMode ? undefined : 'hive-repo-paths'}
+          />
+          {!privacyMode && (
+            <datalist id="hive-repo-paths">
+              {repoPaths.map((p) => (
+                <option key={p} value={p} />
+              ))}
+            </datalist>
+          )}
+        </label>
+        <label className="block text-xs text-gray-400">
+          Objective
+          <textarea
+            aria-label="Agent objective"
+            value={objective}
+            onChange={(e) => {
+              setObjective(e.target.value)
+              setConfirmed(false)
+            }}
+            rows={3}
+            placeholder="Describe the task and the result you need"
+            className={`${fieldClass} resize-y`}
+          />
+        </label>
+        <p className="text-[11px] text-gray-400">
+          Runs stop after 120 seconds. Permissions use each provider's controls. They do not
+          guarantee operating system isolation. Your objective is visible here while you edit.
+        </p>
+        <label className="flex items-start gap-2 text-xs text-gray-300">
+          <input
+            type="checkbox"
+            checked={confirmed}
+            onChange={(e) => setConfirmed(e.target.checked)}
+            className="mt-0.5 shrink-0"
+          />
+          <span>
+            I approve sending this objective to {PROVIDERS.find((p) => p.id === provider)?.name},
+            the selected permissions, and saving the run and its result locally.
+          </span>
+        </label>
+        <button
+          type="button"
+          onClick={() => {
+            void handleLaunch()
+          }}
+          disabled={!canLaunch}
+          className={`${actionClass} w-full text-amber-300`}
+        >
+          {loading ? 'Launching...' : 'Launch agent'}
+        </button>
       </div>
+
+      <section aria-label="Agent runs" className="space-y-2">
+        {sessions.length === 0 && <p className="text-xs text-gray-500">No runs recorded yet.</p>}
+        {sessions.map((session) => {
+          const managed = !!session.taskState
+          const active = managed ? ACTIVE.has(session.taskState!) : session.status === 'running'
+          return (
+            <article
+              key={session.id}
+              className="rounded border border-white/10 bg-black/20 p-3 space-y-2 min-w-0"
+            >
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span className="font-semibold text-gray-200">
+                  {PROVIDERS.find((p) => p.id === session.provider)?.name ?? 'Claude Code'} ·{' '}
+                  {session.role}
+                </span>
+                <span
+                  className={
+                    session.taskState === 'failed' || session.taskState === 'interrupted'
+                      ? 'text-red-300'
+                      : 'text-amber-300'
+                  }
+                >
+                  {managed ? session.taskState : `Legacy terminal · ${session.status}`}
+                </span>
+              </div>
+              <p className="text-[11px] text-gray-400 break-all">{display(session.workingDir)}</p>
+              {managed && (
+                <>
+                  <p className="text-xs text-gray-300 whitespace-pre-wrap break-words">
+                    {display(session.objective ?? '')}
+                  </p>
+                  <p className="text-[11px] text-gray-400">
+                    {session.permissionMode} ·{' '}
+                    {session.acceptedAt
+                      ? `Accepted ${new Date(session.acceptedAt).toLocaleTimeString()}`
+                      : 'Awaiting provider acknowledgement'}
+                  </p>
+                  <p className="text-[11px] text-gray-500">
+                    {session.lastEventAt
+                      ? `Last event ${new Date(session.lastEventAt).toLocaleTimeString()}`
+                      : 'No provider event yet'}
+                    {session.finishedAt
+                      ? ` · Finished ${new Date(session.finishedAt).toLocaleTimeString()}`
+                      : ''}
+                  </p>
+                  {session.parentSessionId && (
+                    <p className="text-[11px] text-gray-500">
+                      Retry of {display(session.parentSessionId)}
+                    </p>
+                  )}
+                </>
+              )}
+              {session.error && (
+                <p role="alert" className="text-xs text-red-300 whitespace-pre-wrap break-words">
+                  {display(session.error)}
+                </p>
+              )}
+              {session.taskState === 'needs-review' && (
+                <p className="text-xs text-amber-300">
+                  The provider returned a result. Inspect it before you mark it reviewed; a result
+                  does not prove the objective is complete.
+                </p>
+              )}
+              {session.events && session.events.length > 0 && (
+                <details>
+                  <summary className="text-xs text-gray-400 cursor-pointer">
+                    Inspect run history
+                  </summary>
+                  <ol className="mt-2 space-y-1 text-[11px] text-gray-400">
+                    {session.events.map((event, index) => (
+                      <li key={index} className="break-words">
+                        {new Date(event.at).toLocaleTimeString()} · {event.state} ·{' '}
+                        {display(event.message)}
+                      </li>
+                    ))}
+                  </ol>
+                </details>
+              )}
+              {session.result && (
+                <details>
+                  <summary className="text-xs text-cyan-300 cursor-pointer">Inspect result</summary>
+                  <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs text-gray-300">
+                    {display(session.result)}
+                  </pre>
+                </details>
+              )}
+              <div className="flex flex-wrap items-center gap-2">
+                {!managed && active && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void attach(session.id)
+                    }}
+                    className={actionClass}
+                  >
+                    Attach legacy terminal
+                  </button>
+                )}
+                {active &&
+                  session.taskState !== 'stopping' &&
+                  (confirmKill === session.id ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void killSession(session.id)
+                          setConfirmKill(null)
+                        }}
+                        className={actionClass}
+                      >
+                        Confirm stop
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmKill(null)}
+                        className={actionClass}
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmKill(session.id)}
+                      className={actionClass}
+                    >
+                      Stop
+                    </button>
+                  ))}
+                {managed &&
+                  RETRYABLE.has(session.taskState!) &&
+                  (confirmRetry === session.id ? (
+                    <>
+                      <p className="text-[11px] text-gray-400 w-full">
+                        Retry sends this objective again with the same provider, workspace and
+                        permissions.
+                      </p>
+                      <button
+                        type="button"
+                        disabled={!enabled || loading}
+                        onClick={() => {
+                          void retry(session.id)
+                          setConfirmRetry(null)
+                        }}
+                        className={actionClass}
+                      >
+                        Confirm retry
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmRetry(null)}
+                        className={actionClass}
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={!enabled || loading}
+                      onClick={() => setConfirmRetry(session.id)}
+                      className={actionClass}
+                    >
+                      Retry
+                    </button>
+                  ))}
+                {session.taskState === 'needs-review' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void review(session.id)
+                    }}
+                    className={actionClass}
+                  >
+                    Mark reviewed
+                  </button>
+                )}
+              </div>
+            </article>
+          )
+        })}
+      </section>
+
+      {sessions.some((s) => !s.taskState) && (
+        <div className="rounded border border-white/10 bg-black/20 p-2">
+          <button
+            type="button"
+            aria-expanded={contextExpanded}
+            onClick={() => {
+              if (contextExpanded) setContextExpanded(false)
+              else
+                void getContext().then((text) => {
+                  setContextText(text)
+                  setContextExpanded(true)
+                })
+            }}
+            className="text-xs text-gray-400"
+          >
+            Legacy shared context
+          </button>
+          {contextExpanded && (
+            <div className="mt-2 space-y-2">
+              <textarea
+                aria-label="Legacy shared context"
+                value={contextText}
+                onChange={(e) => setContextText(e.target.value)}
+                rows={6}
+                className={fieldClass}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (contextText.trim()) void updateContext(contextText.trim())
+                }}
+                className={actionClass}
+              >
+                Push context
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

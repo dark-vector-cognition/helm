@@ -73,6 +73,9 @@ export interface AgentInfo {
 
 export type HiveRoleName = 'architect' | 'builder' | 'analyst' | 'ops' | string
 export type HiveModel = 'opus' | 'sonnet' | 'haiku'
+export type HiveProvider = 'claude-code' | 'cursor' | 'codex'
+export type HivePermissionMode = 'read-only' | 'workspace-write'
+export type HiveTaskState = 'starting' | 'working' | 'stopping' | 'needs-review' | 'reviewed' | 'failed' | 'stopped' | 'interrupted'
 
 export interface HiveRoleTemplate {
   name: HiveRoleName
@@ -85,16 +88,32 @@ export interface HiveRoleTemplate {
 export interface HiveSessionInfo {
   id: string
   role: HiveRoleName
-  model: HiveModel
+  model: HiveModel | 'default'
   tmuxSession: string
   tmuxWindow: string
   pid?: number
   workingDir: string
   startedAt: number
   status: 'running' | 'idle' | 'dead'
+  provider?: HiveProvider
+  taskState?: HiveTaskState
+  permissionMode?: HivePermissionMode
+  objective?: string
+  acceptedAt?: number
+  lastEventAt?: number
+  finishedAt?: number
+  result?: string
+  error?: string
+  parentSessionId?: string
+  timeoutSeconds?: number
+  events?: { at: number; state: HiveTaskState; message: string }[]
 }
 
+
 export interface HiveSpawnRequest {
+  provider?: HiveProvider
+  permissionMode?: HivePermissionMode
+  timeoutSeconds?: number
   role: HiveRoleName
   model?: HiveModel
   workingDir: string
@@ -426,7 +445,10 @@ export const IPC_CHANNELS = {
   HIVE_UPDATE_CONTEXT: 'hive:update-context',
   HIVE_GET_CONTEXT: 'hive:get-context',
   HIVE_ATTACH: 'hive:attach',
-  HIVE_SESSION_UPDATE: 'hive:session-update'
+  HIVE_SESSION_UPDATE: 'hive:session-update',
+  HIVE_RETRY: 'hive:retry',
+  HIVE_REVIEW: 'hive:review',
+  HIVE_LAUNCH_STATE: 'hive:launch-state'
 } as const
 
 // Sentinel types

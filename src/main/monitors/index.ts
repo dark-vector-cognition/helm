@@ -12,7 +12,7 @@ import { promisify } from 'util'
 import { isMacOS } from '../platform'
 import { killProcess, sendProcessSignal, killGroup } from '../actions'
 import { loadConfig } from '../config'
-import { decorateAgentsWithHive, resolveHiveConfig } from '../hive/index'
+import { decorateAgentsWithHive, resolveHiveConfig, getManagedAgents } from '../hive/index'
 
 const execAsync = promisify(exec)
 import { evaluateRules } from '../intelligence/auto-heal'
@@ -185,7 +185,9 @@ async function collectSystemState(): Promise<SystemState> {
   previousCpuInfo = cpuInfo
   const totalMemory = totalmem()
 
-  const agents = [...processAgents, ...fileAgents]
+  const managedAgents = getManagedAgents()
+  const managedPids = new Set(managedAgents.map((agent) => agent.pid).filter(Boolean))
+  const agents = [...processAgents.filter((agent) => !managedPids.has(agent.pid)), ...fileAgents, ...managedAgents]
 
   // Decorate agents with HIVE session info
   const hiveConfig = resolveHiveConfig(monitorConfig.hive)
