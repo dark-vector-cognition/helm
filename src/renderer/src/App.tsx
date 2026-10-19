@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useState, type ReactNode } from 'react'
 import { useSystemStore } from './stores/system'
 import { useNavigationStore, type HelmPageId } from './stores/navigation'
 import { AgentsPanel } from './panels/Agents'
@@ -716,7 +716,7 @@ function App(): JSX.Element {
     return () => document.removeEventListener('visibilitychange', updateVisibility)
   }, [])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     document.documentElement.dataset.skin = activeSkin
     return () => {
       delete document.documentElement.dataset.skin
