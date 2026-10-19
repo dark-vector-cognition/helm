@@ -16,6 +16,8 @@ The demo and screenshots show a review build based on `5.0.0`, including fixes t
 
 HELM is free and open source. [Support HELM](https://darkvectorcognition.ai/helm/#support) with an optional contribution.
 
+Need Helm for your team? [Discuss enterprise with DVC](https://darkvectorcognition.ai/helm/#enterprise).
+
 ## What's new in 5.0
 
 For anyone who cloned an earlier version:
