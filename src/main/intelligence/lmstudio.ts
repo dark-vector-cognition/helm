@@ -240,10 +240,12 @@ export async function probeLmStudioEndpoint(
     }
 
     const payload = await response.json().catch(() => ({}))
-    const model =
+    const selected = loadConfig().lmStudioModel?.trim()
+    const model = selected || (
       Array.isArray(payload?.data) && typeof payload.data[0]?.id === 'string'
         ? payload.data[0].id
         : 'local-model'
+    )
 
     return { url: normalized, ok: true, model }
   } catch (err) {

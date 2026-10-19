@@ -69,6 +69,15 @@ const mockState: SystemState = {
 }
 
 describe('buildBriefingPrompt', () => {
+  it('sends only resource totals in hosted briefing mode', () => {
+    const prompt = buildBriefingPrompt(mockState, true)
+    expect(prompt).toContain('35.5%')
+    expect(prompt).toContain('56.3%')
+    for (const privateDetail of ['my-app', 'postgres', 'claude-code', '/home/user', 'feature/auth', '3000']) {
+      expect(prompt).not.toContain(privateDetail)
+    }
+  })
+
   it('should include process groups in the prompt', () => {
     const prompt = buildBriefingPrompt(mockState)
     expect(prompt).toContain('my-app')
@@ -228,6 +237,27 @@ describe('generateBriefing API key header', () => {
     else process.env.LLM_API_KEY = savedEnvKey
     if (savedEnvUrl === undefined) delete process.env.LM_STUDIO_URL
     else process.env.LM_STUDIO_URL = savedEnvUrl
+  })
+
+  it('uses a pinned hosted model and keeps identities out of its payload', async () => {
+    loadConfigMock.mockReturnValue({ lmStudioUrl: 'https://openrouter.ai/api' })
+    vi.mocked(healLmStudioConnection).mockResolvedValue({ ...connected, url: 'https://openrouter.ai/api', model: 'deepseek/chosen-fixture' })
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ model: 'deepseek/chosen-fixture', choices: [{ message: { content: '{"summary":"Live fixture response","alerts":[],"suggestions":[]}' } }] }) })
+    const result = await generateBriefing(mockState)
+    const sent = JSON.parse(fetchMock.mock.calls[0][1].body)
+    expect(sent.model).toBe('deepseek/chosen-fixture')
+    expect(result.model).toBe('deepseek/chosen-fixture')
+    expect(sent.messages[1].content).toContain('35.5%')
+    expect(sent.messages[1].content).not.toContain('my-app')
+    expect(sent.messages[1].content).not.toContain('/home/user')
+  })
+
+  it('does not claim a successful briefing for an empty provider response', async () => {
+    loadConfigMock.mockReturnValue({ lmStudioUrl: 'https://api.example.com' })
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ choices: [{ message: { content: '' } }] }) })
+    const result = await generateBriefing(mockState)
+    expect(result.summary).toContain('returned no briefing text')
+    expect(result.model).toBeUndefined()
   })
 
   it('sends the configured key as a bearer token', async () => {
