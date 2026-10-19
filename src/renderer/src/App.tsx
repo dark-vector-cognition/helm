@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useSystemStore } from './stores/system'
 import { useNavigationStore, type HelmPageId } from './stores/navigation'
 import { AgentsPanel } from './panels/Agents'
@@ -20,7 +20,6 @@ import { VaultPagePanel } from './panels/VaultPage'
 import { HiveLauncher } from './panels/HiveLauncher'
 import { HELM_SKINS, useSkinStore } from './stores/skin'
 import { usePrivacyStore } from './stores/privacy'
-import { HeaderTicker } from './components/HeaderTicker'
 import { SkinGlobe } from './components/SkinGlobe'
 import { getAudioElement } from './stores/audio-engine'
 import { EnterpriseNotice } from './components/EnterpriseNotice'
@@ -36,33 +35,33 @@ interface PageMeta {
 const PAGES: PageMeta[] = [
   {
     id: 'bridge',
-    label: 'Bridge',
-    kicker: 'Overview',
-    description: 'Overview only. Triage pressure, alerts, and hotspots here, then jump deeper.'
+    label: 'Overview',
+    kicker: 'Your workspace',
+    description: 'Live system pressure, agent signals and the work that needs your attention.'
   },
   {
     id: 'fleet',
     label: 'Fleet',
     kicker: 'Workspace ops',
-    description: 'Owns workspace control, repo drift, and recent commit history.'
+    description: 'Keep workspaces, repository changes and recent commits in view.'
   },
   {
     id: 'swarm',
-    label: 'Swarm',
-    kicker: 'Agent ops',
-    description: 'Owns live agent state, drill-down, and the swarm timeline.'
+    label: 'Agent runs',
+    kicker: 'Intent. Action. Evidence.',
+    description: 'Define the task. Bound its permissions. Inspect the result.'
   },
   {
     id: 'grid',
     label: 'Grid',
     kicker: 'Network and ports',
-    description: 'Owns traffic and exposed listeners.'
+    description: 'Inspect network activity and the ports listening on your machine.'
   },
   {
     id: 'ai',
     label: 'AI',
     kicker: 'Local AI control',
-    description: 'Owns the optional model connection, AI briefings, and usage tracking.'
+    description: 'Connect an optional model for system briefings and inspect recorded usage.'
   },
   {
     id: 'vault',
@@ -86,74 +85,20 @@ const PAGES: PageMeta[] = [
     id: 'logs',
     label: 'Logs',
     kicker: 'Event stream',
-    description: 'Raw stream only. Follow live events without the summarized views.'
+    description: 'Follow events from your configured log sources.'
   }
 ]
 
-const PANEL_DOTS: Record<string, string> = {
-  'Command Center': 'bg-emerald-400',
-  'Workspace Control': 'bg-blue-400',
-  Agents: 'bg-amber-400',
-  'Git Status': 'bg-purple-400',
-  'Operator Briefing': 'bg-cyan-400',
-  'AI Control': 'bg-cyan-400',
-  'Network Traffic': 'bg-green-400',
-  'Listening Ports': 'bg-teal-400',
-  Notifications: 'bg-orange-400',
-  'FM Radio': 'bg-pink-300',
-  'System Logs': 'bg-gray-400',
-  'Git History': 'bg-indigo-400',
-  'Swarm Timeline': 'bg-lime-400',
-  'Spend & Usage': 'bg-violet-400',
-  'Agent Roster': 'bg-amber-400',
-  'Agent Registry': 'bg-yellow-400',
-  'HIVE Control': 'bg-amber-500',
-  'Vault': 'bg-indigo-400'
-}
-
-const PANEL_ACCENT_HEX: Record<string, string> = {
-  'Command Center': '#34d399',
-  'Workspace Control': '#60a5fa',
-  Agents: '#fbbf24',
-  'Git Status': '#c084fc',
-  'Operator Briefing': '#22d3ee',
-  'AI Control': '#22d3ee',
-  'Network Traffic': '#4ade80',
-  'Listening Ports': '#2dd4bf',
-  Notifications: '#fb923c',
-  'FM Radio': '#f9a8d4',
-  'System Logs': '#9ca3af',
-  'Git History': '#818cf8',
-  'Swarm Timeline': '#a3e635',
-  'Spend & Usage': '#a78bfa',
-  'Agent Roster': '#fbbf24',
-  'Agent Registry': '#facc15',
-  'HIVE Control': '#f59e0b',
-  'Vault': '#818cf8'
-}
-
-const PAGE_MONOGRAMS: Record<HelmPageId, string> = {
-  bridge: 'BR',
-  fleet: 'FL',
-  swarm: 'SW',
-  grid: 'GR',
-  ai: 'AI',
-  vault: 'VT',
-  registry: 'RG',
-  radio: 'FM',
-  logs: 'LG'
-}
-
-const PAGE_GLYPH_GRADIENTS: Record<HelmPageId, string> = {
-  bridge: 'from-cyan-300/90 via-sky-300/70 to-teal-300/70',
-  fleet: 'from-blue-300/90 via-indigo-300/75 to-cyan-300/70',
-  swarm: 'from-amber-200/95 via-orange-300/80 to-rose-300/75',
-  grid: 'from-emerald-200/95 via-teal-300/80 to-sky-300/65',
-  ai: 'from-fuchsia-200/95 via-violet-300/80 to-sky-300/65',
-  vault: 'from-indigo-200/95 via-blue-300/80 to-violet-300/65',
-  registry: 'from-yellow-200/95 via-amber-300/80 to-orange-300/65',
-  radio: 'from-pink-200/95 via-fuchsia-300/80 to-cyan-300/70',
-  logs: 'from-lime-200/95 via-emerald-300/75 to-cyan-300/65'
+const PAGE_ICONS: Record<HelmPageId, string> = {
+  bridge: 'M3 3h5v5H3zM12 3h5v5h-5zM3 12h5v5H3zM12 12h5v5h-5z',
+  fleet: 'M2 6h6l2 2h8v9H2zM2 6V3h6l2 3',
+  swarm: 'M5 3l12 7-12 7V3z',
+  grid: 'M2 11h3l3-7 4 12 3-7h3',
+  ai: 'M10 2v4M10 14v4M2 10h4M14 10h4M5 5l2 2M13 13l2 2M5 15l2-2M13 7l2-2M7 7h6v6H7z',
+  vault: 'M4 3h12v14H4zM7 7h6M7 10h6M7 13h4',
+  registry: 'M3 4h14v12H3zM7 4v12M10 8h4M10 12h4',
+  radio: 'M6 6a6 6 0 0 0 0 8M3 3a10 10 0 0 0 0 14M14 6a6 6 0 0 1 0 8M17 3a10 10 0 0 1 0 14M10 7v6',
+  logs: 'M3 5h2M8 5h9M3 10h2M8 10h9M3 15h2M8 15h9'
 }
 
 function DashPanel({
@@ -165,31 +110,10 @@ function DashPanel({
   children: ReactNode
   className?: string
 }): JSX.Element {
-  const accentColor = PANEL_ACCENT_HEX[title] || '#6b7280'
-  const panelStyle: CSSProperties = {
-    background: `radial-gradient(circle at 92% 0%, ${accentColor}14, transparent 26%), var(--helm-panel-bg)`
-  }
-
   return (
-    <section
-      className={`shell-panel min-h-0 flex flex-col overflow-hidden ${className}`}
-      style={panelStyle}
-    >
+    <section className={`shell-panel min-h-0 flex flex-col overflow-hidden ${className}`}>
       <div className="shell-panel-header shrink-0">
-        <div className="flex items-center gap-2">
-          <span
-            className={`h-2 w-2 rounded-full shadow-[0_0_12px_currentColor] ${PANEL_DOTS[title] || 'bg-gray-600'}`}
-          />
-          <h2 className="shell-panel-title text-[10px] font-semibold uppercase tracking-[0.16em]">
-            {title}
-          </h2>
-        </div>
-        <div
-          className="h-2.5 w-12 rounded-full border border-white/10"
-          style={{
-            background: `linear-gradient(90deg, transparent, ${accentColor}, transparent)`
-          }}
-        />
+        <h2 className="shell-panel-title text-[11px] font-semibold">{title}</h2>
       </div>
       <div className="shell-panel-body flex-1 min-h-0 overflow-auto">{children}</div>
     </section>
@@ -232,11 +156,20 @@ function getShellHealth(state: SystemState | null): {
   }
 }
 
-function SkinCard({ skin, active, onSelect }: {
-  skin: (typeof HELM_SKINS)[number]; active: boolean; onSelect: () => void
+function SkinCard({
+  skin,
+  active,
+  onSelect
+}: {
+  skin: (typeof HELM_SKINS)[number]
+  active: boolean
+  onSelect: () => void
 }): JSX.Element {
   return (
-    <button onClick={onSelect} className={`shell-skin-card ${active ? 'shell-skin-card--active' : ''}`}>
+    <button
+      onClick={onSelect}
+      className={`shell-skin-card ${active ? 'shell-skin-card--active' : ''}`}
+    >
       <div className="shell-skin-preview">
         {skin.palette.map((color, i) => (
           <div key={i} style={{ background: color, flex: i === 0 ? 3 : 1 }} />
@@ -258,7 +191,9 @@ function SkinSelectorPanel({ onClose }: { onClose: () => void }): JSX.Element {
   const setActiveSkin = useSkinStore((s) => s.setActiveSkin)
 
   useEffect(() => {
-    const handler = (e: KeyboardEvent): void => { if (e.key === 'Escape') onClose() }
+    const handler = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') onClose()
+    }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [onClose])
@@ -273,8 +208,15 @@ function SkinSelectorPanel({ onClose }: { onClose: () => void }): JSX.Element {
         </div>
         <div className="shell-skin-grid">
           {HELM_SKINS.map((skin) => (
-            <SkinCard key={skin.id} skin={skin} active={skin.id === activeSkin}
-              onSelect={() => { setActiveSkin(skin.id); onClose() }} />
+            <SkinCard
+              key={skin.id}
+              skin={skin}
+              active={skin.id === activeSkin}
+              onSelect={() => {
+                setActiveSkin(skin.id)
+                onClose()
+              }}
+            />
           ))}
         </div>
       </div>
@@ -286,7 +228,10 @@ function SkinChip({ onOpen }: { onOpen: () => void }): JSX.Element {
   const activeSkin = useSkinStore((s) => s.activeSkin)
   const skinMeta = HELM_SKINS.find((s) => s.id === activeSkin)
   return (
-    <button onClick={onOpen} className="shell-control-button px-3 py-1.5 text-xs font-medium flex items-center gap-2">
+    <button
+      onClick={onOpen}
+      className="shell-control-button px-3 py-1.5 text-xs font-medium flex items-center gap-2"
+    >
       <span className="w-2 h-2 rounded-full" style={{ background: 'var(--helm-accent)' }} />
       {skinMeta?.label ?? 'Skin'}
     </button>
@@ -334,7 +279,9 @@ function SentinelChip(): JSX.Element {
 
   if (!status || !status.enabled) return <></>
 
-  const hasCritical = status.activeAlerts.some((a) => a.severity === 'critical' || a.severity === 'warning')
+  const hasCritical = status.activeAlerts.some(
+    (a) => a.severity === 'critical' || a.severity === 'warning'
+  )
   const hasInfo = status.activeAlerts.some((a) => a.severity === 'info')
   const dotColor = hasCritical
     ? 'bg-red-400 shadow-[0_0_8px_rgba(248,113,113,0.8)]'
@@ -355,11 +302,7 @@ function SentinelChip(): JSX.Element {
   )
 }
 
-function Header({
-  onOpenSkinSelector
-}: {
-  onOpenSkinSelector: () => void
-}): JSX.Element {
+function Header({ onOpenSkinSelector }: { onOpenSkinSelector: () => void }): JSX.Element {
   const state = useSystemStore((s) => s.state)
   const refresh = useSystemStore((s) => s.refresh)
   const health = getShellHealth(state)
@@ -371,14 +314,26 @@ function Header({
         <div className={`w-2.5 h-2.5 rounded-full ${health.dot} shadow-md ${health.glow}`} />
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-base font-semibold text-white tracking-[0.16em] font-[family-name:var(--helm-font-mono)]">HELM</h1>
-            <span className="text-[10px] shell-subtle font-[family-name:var(--helm-font-mono)]">V5</span>
+            <svg className="shell-brand-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+              <path
+                d="M4 5v22M28 5v22M4 16h24M10 10v12M22 10v12"
+                stroke="currentColor"
+                strokeWidth="2"
+              />
+              <circle cx="16" cy="16" r="3" fill="currentColor" />
+            </svg>
+            <h1 className="shell-brand-word">HELM</h1>
+            <span className="shell-brand-version">06</span>
           </div>
           <div className="text-[11px] shell-subtle">{health.label}</div>
         </div>
       </div>
 
-      <HeaderTicker />
+      <div className="shell-header-context">
+        <span>Personal workspace</span>
+        <span aria-hidden="true">/</span>
+        <span>Local machine</span>
+      </div>
 
       <div className="ml-auto flex shrink-0 items-center gap-3">
         <div className="hidden sm:flex items-center gap-2">
@@ -396,7 +351,7 @@ function Header({
         {state && (
           <div className="flex items-center gap-2">
             <span
-              className={`w-1.5 h-1.5 rounded-full ${isFresh ? 'bg-green-400 animate-pulse' : 'bg-gray-600'}`}
+              className={`w-1.5 h-1.5 rounded-full ${isFresh ? 'bg-green-400' : 'bg-gray-600'}`}
             />
             <span className="text-xs shell-subtle font-mono tabular-nums">
               {new Date(state.timestamp).toLocaleTimeString()}
@@ -409,15 +364,33 @@ function Header({
 }
 
 function PageHeader({ meta }: { meta: PageMeta }): JSX.Element {
+  const setCurrentPage = useNavigationStore((s) => s.setCurrentPage)
   return (
     <div className="shell-page-header px-4 py-2">
       <div>
         <div className="shell-page-kicker text-[9px] uppercase tracking-[0.16em]">
           {meta.kicker}
         </div>
-        <h2 className="text-lg font-semibold text-white">{meta.label}</h2>
+        <h2 className="shell-page-title">
+          {meta.id === 'bridge' ? (
+            <>
+              Everything <em>in hand.</em>
+            </>
+          ) : (
+            meta.label
+          )}
+        </h2>
         <p className="pt-1 text-sm shell-subtle max-w-[56rem]">{meta.description}</p>
       </div>
+      {meta.id !== 'swarm' && (
+        <button
+          type="button"
+          className="shell-primary-button"
+          onClick={() => setCurrentPage('swarm')}
+        >
+          + Launch agent
+        </button>
+      )}
     </div>
   )
 }
@@ -428,7 +401,7 @@ function BridgePage(): JSX.Element {
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 2xl:grid-cols-[minmax(0,1.45fr)_minmax(360px,0.9fr)]">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(290px,0.9fr)]">
         <DashPanel title="Command Center" className="min-h-[460px]">
           <div className="flex h-full flex-col gap-3">
             <div className="px-1 text-[11px] shell-subtle">
@@ -455,7 +428,7 @@ function BridgePage(): JSX.Element {
 function FleetPage(): JSX.Element {
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 2xl:grid-cols-[minmax(0,1.4fr)_minmax(360px,0.85fr)]">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(290px,0.85fr)]">
         <DashPanel title="Workspace Control" className="min-h-[420px]">
           <CommandCenterPanel initialSortMode="workspace" showSortControls />
         </DashPanel>
@@ -473,17 +446,17 @@ function FleetPage(): JSX.Element {
 function SwarmPage(): JSX.Element {
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 2xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.6fr)]">
-        <DashPanel title="Agent Roster" className="min-h-[460px]">
+      <DashPanel title="Launch and supervise">
+        <HiveLauncher />
+      </DashPanel>
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]">
+        <DashPanel title="Agent signals" className="min-h-[300px]">
           <AgentsPanel />
         </DashPanel>
-        <DashPanel title="HIVE Control" className="min-h-[460px]">
-          <HiveLauncher />
+        <DashPanel title="Swarm Timeline" className="min-h-[300px]">
+          <TimelinePanel />
         </DashPanel>
       </div>
-      <DashPanel title="Swarm Timeline" className="min-h-[280px]">
-        <TimelinePanel />
-      </DashPanel>
     </div>
   )
 }
@@ -554,16 +527,17 @@ function LogsPage(): JSX.Element {
   )
 }
 
-function NavGlyph({ pageId, active }: { pageId: HelmPageId; active: boolean }): JSX.Element {
+function NavGlyph({ pageId }: { pageId: HelmPageId }): JSX.Element {
   return (
-    <span className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/16 bg-black/10 text-[10px] font-semibold tracking-[0.22em] text-white/90 shadow-[0_12px_24px_rgba(4,10,22,0.2)]">
-      <span
-        className={`absolute inset-0 bg-gradient-to-br ${PAGE_GLYPH_GRADIENTS[pageId]} ${active ? 'opacity-100' : 'opacity-75'}`}
+    <svg className="shell-nav-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <path
+        d={PAGE_ICONS[pageId]}
+        stroke="currentColor"
+        strokeWidth="1.25"
+        strokeLinecap="round"
+        strokeLinejoin="round"
       />
-      <span className="absolute inset-x-1 top-1 h-3 rounded-full bg-white/30 blur-md" />
-      <span className="absolute inset-1 rounded-full border border-white/20" />
-      <span className="relative">{PAGE_MONOGRAMS[pageId]}</span>
-    </span>
+    </svg>
   )
 }
 
@@ -596,8 +570,7 @@ function NavBadge({
     case 'logs':
       return null
     case 'registry':
-      badge = '\u{1F3C6}'
-      break
+      return null
     case 'radio':
       badge = 'fm'
       break
@@ -623,14 +596,14 @@ function ShellNav({
 }): JSX.Element {
   return (
     <>
-      <aside className="shell-nav hidden xl:flex shrink-0 flex-col p-2">
+      <aside className="shell-nav shrink-0 flex-col p-2">
         <div className="px-2 pb-2">
           <div className="shell-page-kicker text-[9px] uppercase tracking-[0.14em]">
-            Navigation
+            Your workspace
           </div>
         </div>
-        <div className="chrome-ribbed mx-2" />
-        <nav className="pt-2 space-y-1.5 px-1 flex-1 min-h-0 overflow-y-auto">
+
+        <nav className="shell-nav-links pt-2 space-y-1.5 px-1 flex-1 min-h-0 overflow-y-auto">
           {PAGES.map((page) => {
             const active = page.id === currentPage
             return (
@@ -638,10 +611,11 @@ function ShellNav({
                 key={page.id}
                 type="button"
                 onClick={() => setCurrentPage(page.id)}
+                aria-current={active ? 'page' : undefined}
                 className={`shell-nav-button w-full text-left ${active ? 'shell-nav-button--active' : 'shell-nav-button--inactive'}`}
               >
                 <div className="flex items-center gap-3">
-                  <NavGlyph pageId={page.id} active={active} />
+                  <NavGlyph pageId={page.id} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-3">
                       <div className="text-sm font-semibold text-white">{page.label}</div>
@@ -658,10 +632,18 @@ function ShellNav({
             )
           })}
         </nav>
+        <div className="shell-nav-note">
+          <strong>Intent. Action. Evidence.</strong>
+          <span>
+            Keep the work in view.
+            <br />
+            Keep the decisions yours.
+          </span>
+        </div>
         <EnterpriseNotice />
       </aside>
 
-      <div className="xl:hidden overflow-x-auto">
+      <div className="shell-compact-nav overflow-x-auto">
         <div className="flex gap-2 min-w-max">
           {PAGES.map((page) => {
             const active = page.id === currentPage
@@ -670,6 +652,7 @@ function ShellNav({
                 key={page.id}
                 type="button"
                 onClick={() => setCurrentPage(page.id)}
+                aria-current={active ? 'page' : undefined}
                 className={`shell-mobile-nav-button rounded-full px-3 py-2 text-xs transition-colors ${
                   active ? 'shell-mobile-nav-button--active text-white' : 'shell-subtle'
                 }`}
@@ -687,22 +670,32 @@ function ShellNav({
 
 function PageContent({ currentPage }: { currentPage: HelmPageId }): JSX.Element {
   switch (currentPage) {
-    case 'bridge':   return <BridgePage />
-    case 'fleet':    return <FleetPage />
-    case 'swarm':    return <SwarmPage />
-    case 'grid':     return <GridPage />
-    case 'ai':       return <AIPage />
-    case 'vault':    return <VaultPage />
-    case 'registry': return <RegistryPage />
-    case 'radio':    return <RadioPage />
-    case 'logs':     return <LogsPage />
-    default:         return <BridgePage />
+    case 'bridge':
+      return <BridgePage />
+    case 'fleet':
+      return <FleetPage />
+    case 'swarm':
+      return <SwarmPage />
+    case 'grid':
+      return <GridPage />
+    case 'ai':
+      return <AIPage />
+    case 'vault':
+      return <VaultPage />
+    case 'registry':
+      return <RegistryPage />
+    case 'radio':
+      return <RadioPage />
+    case 'logs':
+      return <LogsPage />
+    default:
+      return <BridgePage />
   }
 }
 
 function App(): JSX.Element {
   const activeSkin = useSkinStore((s) => s.activeSkin)
-  const state = useSystemStore((s) => s.state)
+  const isReady = useSystemStore((s) => s.state !== null)
   const initialize = useSystemStore((s) => s.initialize)
   const currentPage = useNavigationStore((s) => s.currentPage)
   const setCurrentPage = useNavigationStore((s) => s.setCurrentPage)
@@ -713,6 +706,15 @@ function App(): JSX.Element {
     initialize()
     getAudioElement()
   }, [initialize])
+
+  useEffect(() => {
+    const updateVisibility = (): void => {
+      document.documentElement.dataset.hidden = String(document.hidden)
+    }
+    updateVisibility()
+    document.addEventListener('visibilitychange', updateVisibility)
+    return () => document.removeEventListener('visibilitychange', updateVisibility)
+  }, [])
 
   useEffect(() => {
     document.documentElement.dataset.skin = activeSkin
@@ -727,7 +729,11 @@ function App(): JSX.Element {
         event.preventDefault()
         setPaletteOpen((prev) => !prev)
       }
-      if ((event.metaKey || event.ctrlKey) && event.shiftKey && (event.key === 's' || event.key === 'S')) {
+      if (
+        (event.metaKey || event.ctrlKey) &&
+        event.shiftKey &&
+        (event.key === 's' || event.key === 'S')
+      ) {
         event.preventDefault()
         setSkinOpen((prev) => !prev)
       }
@@ -736,7 +742,7 @@ function App(): JSX.Element {
     return () => window.removeEventListener('keydown', handler)
   }, [])
 
-  if (!state) {
+  if (!isReady) {
     return (
       <div
         className="helm-shell shell-loading flex items-center justify-center h-screen"
@@ -759,23 +765,20 @@ function App(): JSX.Element {
     >
       <Header onOpenSkinSelector={() => setSkinOpen(true)} />
 
-      <div className="shrink-0 px-4 pt-2 overflow-x-auto">
-        <ScorecardsStrip />
-      </div>
-      {(currentPage === 'bridge' || currentPage === 'fleet') && (
-        <div className="shrink-0 px-4 pt-1.5">
-          <SessionDeltaBanner />
-        </div>
-      )}
-
-      <div className="flex-1 min-h-0 px-4 pb-4 pt-2">
-        <div className="h-full min-h-0 flex flex-col xl:flex-row gap-4">
+      <div className="signal-body flex-1 min-h-0">
+        <div className="signal-layout h-full min-h-0">
           <ShellNav currentPage={currentPage} setCurrentPage={setCurrentPage} />
 
           <main className="shell-main flex-1 min-h-0 overflow-hidden flex flex-col">
-            <PageHeader meta={activePageMeta} />
-            <div className="flex-1 min-h-0 overflow-y-auto p-5">
-              <PageContent currentPage={currentPage} />
+            <div className="shell-page-scroll flex-1 min-h-0 overflow-y-auto" key={currentPage}>
+              <PageHeader meta={activePageMeta} />
+              <div className="shell-metrics">
+                <ScorecardsStrip />
+              </div>
+              {(currentPage === 'bridge' || currentPage === 'fleet') && <SessionDeltaBanner />}
+              <div className="shell-page-content">
+                <PageContent currentPage={currentPage} />
+              </div>
             </div>
           </main>
         </div>

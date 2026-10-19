@@ -83,9 +83,21 @@ afterEach(() => {
 const render = (): string => renderToStaticMarkup(createElement(HiveLauncher))
 
 describe('managed agent launcher', () => {
+  it('shows the platform capability reason and keeps launch disabled', async () => {
+    api.hiveLaunchState.mockResolvedValue({
+      enabled: false,
+      reason: 'Managed agent launch is not available on Windows in this build.'
+    })
+    await useHiveStore.getState().refresh()
+    const html = render()
+    expect(html).toContain('not available on Windows')
+    expect(html).toContain('disabled=""')
+    expect(api.hiveSpawn).not.toHaveBeenCalled()
+    useHiveStore.setState({ disabledReason: null })
+  })
   it('requires explicit enablement and objective approval, with no silent global enable', () => {
     const html = render()
-    expect(html).toContain('HELM_HIVE_ENABLED=true')
+    expect(html).toContain('Agent launch is disabled')
     expect(html).toContain('Claude Code')
     expect(html).toContain('Cursor')
     expect(html).toContain('Codex')
@@ -123,7 +135,7 @@ describe('managed agent launcher', () => {
       'stopped',
       'interrupted'
     ])
-      expect(html).toContain(`>${state}<`)
+      expect(html).toContain(`data-state="${state}"`)
     expect(html).toContain('Legacy terminal · running')
     expect(html.match(/>Mark reviewed</g)).toHaveLength(1)
     expect(html.match(/>Retry</g)).toHaveLength(3)
