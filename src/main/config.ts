@@ -90,6 +90,7 @@ function parseCommandOrPathEnv(name: string): string | undefined {
 
 function applyEnvOverrides(config: HelmConfig): HelmConfig {
   const envLmStudioUrl = process.env.LM_STUDIO_URL?.trim()
+  const envModel = process.env.LM_STUDIO_MODEL?.trim()
   const envGitRepoPaths = parseListEnv('HELM_GIT_REPO_PATHS')
   const envAgentFeedPaths = parseListEnv('HELM_AGENT_FEED_PATHS')
   const envLogFilePaths = parseListEnv('HELM_LOG_FILE_PATHS')
@@ -104,6 +105,7 @@ function applyEnvOverrides(config: HelmConfig): HelmConfig {
   const nextConfig: HelmConfig = { ...config }
 
   if (envLmStudioUrl) nextConfig.lmStudioUrl = envLmStudioUrl
+  if (envModel) nextConfig.lmStudioModel = envModel
   if (envGitRepoPaths) nextConfig.gitRepoPaths = envGitRepoPaths
   if (envAgentFeedPaths) nextConfig.agentFeedPaths = envAgentFeedPaths
   if (envLogFilePaths) nextConfig.logFilePaths = envLogFilePaths
