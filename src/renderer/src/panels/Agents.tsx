@@ -339,12 +339,15 @@ function HiveAgentActions({ sessionId }: { sessionId: string }): JSX.Element {
   const killSession = useHiveStore((s) => s.killSession)
   const [message, setMessage] = useState('')
   const [confirmKill, setConfirmKill] = useState(false)
+  const managed = useHiveStore((store) => store.sessions.find((session) => session.id === sessionId)?.provider)
 
   async function handleSend(): Promise<void> {
     if (!message.trim()) return
     await sendMessage(sessionId, message.trim())
     setMessage('')
   }
+
+  if (managed) return <p className="text-xs text-amber-300">Inspect this managed run and its result in HIVE Control.</p>
 
   return (
     <div className="rounded-lg border border-amber-800/30 bg-amber-950/15 p-3 space-y-2">
