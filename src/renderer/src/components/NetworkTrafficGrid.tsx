@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { NetworkScope } from '../../../shared/types'
+import { startVisualAnimation } from './visual-motion'
 
 const TAU = Math.PI * 2
 const SCOPE_ORDER: NetworkScope[] = ['loopback', 'lan', 'internet', 'unknown']
@@ -118,7 +119,6 @@ export function NetworkTrafficGrid({
 }: NetworkTrafficGridProps): JSX.Element {
   const hostRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const animationRef = useRef(0)
   const [size, setSize] = useState({ width: 0, height: 0 })
 
   useEffect(() => {
@@ -148,17 +148,17 @@ export function NetworkTrafficGrid({
     const canvas = canvasRef.current
     if (!canvas || !size.width || !size.height) return
 
-    const dpr = window.devicePixelRatio || 1
+    const dpr = Math.min(window.devicePixelRatio || 1, 2)
     canvas.width = size.width * dpr
     canvas.height = size.height * dpr
     canvas.style.width = `${size.width}px`
     canvas.style.height = `${size.height}px`
 
-    const render = (): void => {
-      const context = canvas.getContext('2d')
-      if (!context) return
+    const context = canvas.getContext('2d')
+    if (!context) return
+    const scopes = new Set(peers.map((peer) => peer.scope))
 
-      const time = performance.now() / 1000
+    const render = (time: number): void => {
       const width = size.width
       const height = size.height
       const centerX = width / 2
@@ -170,8 +170,8 @@ export function NetworkTrafficGrid({
       context.scale(dpr, dpr)
 
       const wash = context.createLinearGradient(0, 0, width, height)
-      wash.addColorStop(0, 'rgba(15, 23, 42, 0.92)')
-      wash.addColorStop(1, 'rgba(2, 6, 23, 0.95)')
+      wash.addColorStop(0, 'rgba(22, 29, 26, 0.98)')
+      wash.addColorStop(1, 'rgba(12, 16, 14, 0.98)')
       context.fillStyle = wash
       context.fillRect(0, 0, width, height)
 
@@ -192,7 +192,7 @@ export function NetworkTrafficGrid({
 
       for (const scope of SCOPE_ORDER) {
         const meta = SCOPE_META[scope]
-        if (!peers.some((peer) => peer.scope === scope)) continue
+        if (!scopes.has(scope)) continue
 
         context.beginPath()
         context.ellipse(
@@ -283,20 +283,20 @@ export function NetworkTrafficGrid({
       context.fillStyle = 'rgba(226, 232, 240, 0.82)'
       context.font = '11px var(--helm-font-mono)'
       context.fillText('HOST', centerX - 14, centerY + 27)
-
-      animationRef.current = requestAnimationFrame(render)
     }
 
-    animationRef.current = requestAnimationFrame(render)
-    return () => cancelAnimationFrame(animationRef.current)
+    const animation = startVisualAnimation(canvas, render, () =>
+      peers.some((peer) => peer.bytesInPerSec > 0 || peer.bytesOutPerSec > 0)
+    )
+    return animation.dispose
   }, [layout, peers, selectedPeerId, size.height, size.width])
 
   return (
     <div
       ref={hostRef}
-      className="relative h-[250px] overflow-hidden rounded-xl border border-white/8 bg-slate-950/75"
+      className="relative h-[250px] overflow-hidden rounded-xl border border-white/8 bg-[#101512]"
     >
-      <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
+      <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" aria-hidden="true" />
 
       <div className="pointer-events-none absolute left-3 top-3 rounded-full border border-white/10 bg-black/35 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-white/65">
         Traffic Grid
@@ -309,7 +309,8 @@ export function NetworkTrafficGrid({
             key={peer.id}
             type="button"
             onClick={() => onSelect(peer.id)}
-            className="absolute -translate-x-1/2 -translate-y-1/2 outline-none"
+            aria-pressed={selected}
+            className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[var(--helm-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-black"
             style={{ left: `${peer.x}px`, top: `${peer.y}px` }}
             title={`${peer.label} • ${SCOPE_META[peer.scope].label}`}
           >

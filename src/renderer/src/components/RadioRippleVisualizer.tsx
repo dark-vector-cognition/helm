@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react'
 import type { AudioStatus } from '../stores/audio-engine'
+import { useSkinStore } from '../stores/skin'
+import { startVisualAnimation, type VisualAnimation } from './visual-motion'
 
 const TAU = Math.PI * 2
 
@@ -32,7 +34,8 @@ export function RadioRippleVisualizer({
   seed
 }: RadioRippleVisualizerProps): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const animationRef = useRef(0)
+  const animationRef = useRef<VisualAnimation | null>(null)
+  const activeSkin = useSkinStore((s) => s.activeSkin)
   const stateRef = useRef({ status, volume, seed: seed ?? 'signal' })
 
   stateRef.current = { status, volume, seed: seed ?? 'signal' }
@@ -45,13 +48,14 @@ export function RadioRippleVisualizer({
       const parent = canvas.parentElement
       if (!parent) return
 
-      const dpr = window.devicePixelRatio || 1
+      const dpr = Math.min(window.devicePixelRatio || 1, 2)
       const width = parent.clientWidth
       const height = Math.max(112, parent.clientHeight)
       canvas.width = width * dpr
       canvas.height = height * dpr
       canvas.style.width = `${width}px`
       canvas.style.height = `${height}px`
+      animationRef.current?.redraw()
     }
 
     const observer = new ResizeObserver(resize)
@@ -60,19 +64,18 @@ export function RadioRippleVisualizer({
     }
     resize()
 
-    const render = (): void => {
-      const context = canvas.getContext('2d')
-      if (!context) return
+    const context = canvas.getContext('2d')
+    if (!context) { observer.disconnect(); return }
+    const computedStyle = getComputedStyle(canvas)
+    const accent = computedStyle.getPropertyValue('--helm-accent').trim() || '#d8ef8a'
+    const dim = computedStyle.getPropertyValue('--helm-shell-muted').trim() || '#718378'
 
-      const dpr = window.devicePixelRatio || 1
+    const render = (time: number): void => {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2)
       const width = canvas.width / dpr
       const height = canvas.height / dpr
-      const time = performance.now() / 1000
       const centerX = width / 2
       const surfaceY = height * 0.68
-      const computedStyle = getComputedStyle(canvas)
-      const accent = computedStyle.getPropertyValue('--winamp-blue-bright').trim() || '#5eb3ff'
-      const dim = computedStyle.getPropertyValue('--winamp-screen-dim').trim() || '#688eb7'
       const { seed: currentSeed } = stateRef.current
       const phase = hashSeed(currentSeed) * TAU
 
@@ -214,15 +217,19 @@ export function RadioRippleVisualizer({
         context.restore()
       }
 
-      animationRef.current = requestAnimationFrame(render)
     }
 
-    animationRef.current = requestAnimationFrame(render)
+    animationRef.current = startVisualAnimation(canvas, render, () =>
+      stateRef.current.status === 'playing' || stateRef.current.status === 'loading'
+    )
     return () => {
       observer.disconnect()
-      cancelAnimationFrame(animationRef.current)
+      animationRef.current?.dispose()
+      animationRef.current = null
     }
-  }, [])
+  }, [activeSkin])
+
+  useEffect(() => animationRef.current?.redraw(), [status, volume, seed])
 
   return (
     <div className={`winamp-ripple-panel winamp-ripple-panel--${status}`} aria-hidden="true">

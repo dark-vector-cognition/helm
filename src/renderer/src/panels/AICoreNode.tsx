@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useRef, useCallback } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
+import { useSkinStore } from '../stores/skin'
+import { startVisualAnimation, type VisualAnimation } from '../components/visual-motion'
 import type { ProcessGroup, AgentInfo, PortInfo, GitRepoInfo } from '../../../shared/types'
 import {
   type MechAntenna, type MechParams, type ArmorPlate, type CircuitNode,
@@ -81,11 +83,12 @@ interface RenderState {
   plates: ArmorPlate[]
   circuits: CircuitNode[]
   mono: boolean
+  accent?: { r: number; g: number; b: number }
 }
 
-function renderFrame(ctx: CanvasRenderingContext2D, w: number, h: number, time: number, st: RenderState): void {
+function renderFrame(ctx: CanvasRenderingContext2D, w: number, h: number, time: number, st: RenderState, still: boolean): void {
   const { params, antennas, plates, circuits, mono, mode } = st
-  const gc = MODE_THEME[mode].glowColor
+  const gc = st.accent ?? MODE_THEME[mode].glowColor
 
   ctx.clearRect(0, 0, w, h)
 
@@ -113,7 +116,7 @@ function renderFrame(ctx: CanvasRenderingContext2D, w: number, h: number, time: 
   }
 
   // 2. Orbiting debris
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < 8; i++) {
     const a = time * (0.08 + i * 0.012) + i * 1.3
     const r = BASE_R + 20 + (i * 7) % 50
     const dx = CX + Math.cos(a) * r
@@ -133,7 +136,9 @@ function renderFrame(ctx: CanvasRenderingContext2D, w: number, h: number, time: 
     let lengthMul = params.spkLen
     let alpha = 1.0
 
-    if (ant.dying) {
+    if (still) {
+      alpha = ant.dying ? 0 : 1
+    } else if (ant.dying) {
       const dt = Math.max(0, Math.min(1, (time - ant.deathTime) / 0.4))
       lengthMul *= 1 - dt
       alpha = 1 - dt
@@ -143,12 +148,16 @@ function renderFrame(ctx: CanvasRenderingContext2D, w: number, h: number, time: 
       alpha = bt
     }
 
-    ant.currentLength += (ant.baseLength * lengthMul - ant.currentLength) * 0.08
+    ant.currentLength = still
+      ? ant.baseLength * lengthMul
+      : ant.currentLength + (ant.baseLength * lengthMul - ant.currentLength) * 0.16
 
     const cR = coreRadius(ant.angle, time, params, BASE_R)
     const bx = CX + Math.cos(ant.angle) * cR
     const by = CY + Math.sin(ant.angle) * cR
-    const c = mono ? { r: 200, g: 200, b: 200 } : ant.color
+    const c = mono ? { r: 200, g: 200, b: 200 }
+      : st.accent ? (ant.kind === 'agent' ? { r: 110, g: 217, b: 196 } : gc)
+      : ant.color
     const segLen = ant.currentLength / ant.segments
     const pulse = Math.sin(time * ant.pulseFreq * TAU + ant.phase) * 0.5 + 0.5
 
@@ -225,9 +234,9 @@ function renderFrame(ctx: CanvasRenderingContext2D, w: number, h: number, time: 
       CX + Math.cos(midAng) * innerR, CY + Math.sin(midAng) * innerR, 0,
       CX + Math.cos(midAng) * outerR, CY + Math.sin(midAng) * outerR, plate.thickness
     )
-    grd.addColorStop(0, rgba(40, 32, 18, 0.9))
-    grd.addColorStop(0.5, rgba(70, 56, 32, 0.85))
-    grd.addColorStop(1, rgba(35, 28, 16, 0.8))
+    grd.addColorStop(0, st.accent ? 'rgba(26,32,28,0.9)' : rgba(40,32,18,0.9))
+    grd.addColorStop(0.5, st.accent ? 'rgba(42,51,45,0.85)' : rgba(70,56,32,0.85))
+    grd.addColorStop(1, st.accent ? 'rgba(22,28,24,0.8)' : rgba(35,28,16,0.8))
     ctx.fillStyle = grd
     ctx.fill()
 
@@ -298,13 +307,13 @@ export function AICoreNode({
   onRequestBriefing, onRepair, onToggleMono
 }: AICoreNodeProps): JSX.Element {
   const theme = MODE_THEME[mode]
-  const containerRef = useRef<HTMLDivElement | null>(null)
+  const activeSkin = useSkinStore((s) => s.activeSkin)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const stateRef = useRef<RenderState>({
     mode, params: { ...MODE_MECH_PARAMS[mode] },
-    antennas: [], plates: buildArmorPlates(12), circuits: buildCircuitNodes(18), mono
+    antennas: [], plates: buildArmorPlates(8), circuits: buildCircuitNodes(12), mono
   })
-  const rafRef = useRef<number>(0)
+  const animationRef = useRef<VisualAnimation | null>(null)
   const endpoint = lmStudioUrl.replace(/^https?:\/\//, '')
 
   const entities = useMemo(() => buildEntities(processes, agents, ports, gitRepos), [processes, agents, ports, gitRepos])
@@ -320,46 +329,54 @@ export function AICoreNode({
     const now = performance.now() / 1000
     const allEntities = [...entities]
     const realCount = allEntities.length
-    const fillCount = Math.max(0, 28 - realCount)
+    const fillCount = Math.max(0, 8 - realCount)
     for (let i = 0; i < fillCount; i++) {
-      allEntities.push({ kind: 'ambient', name: `ambient-${i}`, activity: 0.05 + Math.random() * 0.15 })
+      allEntities.push({ kind: 'ambient', name: `ambient-${i}`, activity: 0.1 })
     }
     stateRef.current.antennas = reconcileAntennas(stateRef.current.antennas, allEntities, now)
+    animationRef.current?.redraw()
   }, [entities])
 
   // Sync mode + mono
-  useEffect(() => { stateRef.current.mode = mode }, [mode])
-  useEffect(() => { stateRef.current.mono = mono }, [mono])
-
-  // Canvas setup + render loop
-  const setupCanvas = useCallback(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const rect = canvas.parentElement?.getBoundingClientRect()
-    if (!rect) return
-    const dpr = window.devicePixelRatio || 1
-    canvas.width = rect.width * dpr
-    canvas.height = rect.height * dpr
-    canvas.style.width = `${rect.width}px`
-    canvas.style.height = `${rect.height}px`
-  }, [])
+  useEffect(() => {
+    stateRef.current.mode = mode
+    animationRef.current?.redraw()
+  }, [mode])
+  useEffect(() => {
+    stateRef.current.mono = mono
+    animationRef.current?.redraw()
+  }, [mono])
 
   useEffect(() => {
-    setupCanvas()
-    const onResize = (): void => setupCanvas()
-    window.addEventListener('resize', onResize)
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    const accent = getComputedStyle(canvas).getPropertyValue('--helm-accent').trim()
+    const hex = /^#([0-9a-f]{6})$/i.exec(accent)?.[1]
+    stateRef.current.accent = activeSkin === 'signal' && hex ? {
+      r: parseInt(hex.slice(0, 2), 16), g: parseInt(hex.slice(2, 4), 16), b: parseInt(hex.slice(4, 6), 16)
+    } : undefined
 
-    function loop(): void {
-      const canvas = canvasRef.current
-      if (!canvas) return
-      const ctx = canvas.getContext('2d')
-      if (!ctx) return
+    const resize = (): void => {
+      const parent = canvas.parentElement
+      if (!parent) return
+      const dpr = Math.min(window.devicePixelRatio || 1, 2)
+      canvas.width = parent.clientWidth * dpr
+      canvas.height = parent.clientHeight * dpr
+      canvas.style.width = `${parent.clientWidth}px`
+      canvas.style.height = `${parent.clientHeight}px`
+      animationRef.current?.redraw()
+    }
+    resize()
+    const observer = new ResizeObserver(resize)
+    if (canvas.parentElement) observer.observe(canvas.parentElement)
 
-      const time = performance.now() / 1000
+    animationRef.current = startVisualAnimation(canvas, (time, still) => {
       const st = stateRef.current
       const target = MODE_MECH_PARAMS[st.mode] || MODE_MECH_PARAMS.idle
       const p = st.params
-      const lerpF = 0.02
+      const lerpF = still ? 1 : 0.04
       p.bSpd += (target.bSpd - p.bSpd) * lerpF
       p.bAmp += (target.bAmp - p.bAmp) * lerpF
       p.sqSpd += (target.sqSpd - p.sqSpd) * lerpF
@@ -368,34 +385,18 @@ export function AICoreNode({
       p.spkLen += (target.spkLen - p.spkLen) * lerpF
       p.spkAct += (target.spkAct - p.spkAct) * lerpF
       p.pDrift += (target.pDrift - p.pDrift) * lerpF
+      renderFrame(ctx, canvas.width, canvas.height, time, st, still)
+    }, () => ['thinking', 'repairing', 'throughput'].includes(stateRef.current.mode))
 
-      renderFrame(ctx, canvas.width, canvas.height, time, st)
-      rafRef.current = requestAnimationFrame(loop)
-    }
-
-    rafRef.current = requestAnimationFrame(loop)
     return () => {
-      cancelAnimationFrame(rafRef.current)
-      window.removeEventListener('resize', onResize)
+      animationRef.current?.dispose()
+      animationRef.current = null
+      observer.disconnect()
     }
-  }, [setupCanvas])
-
-  function handlePointerMove(event: React.PointerEvent<HTMLDivElement>): void {
-    const el = containerRef.current
-    if (!el) return
-    const rect = el.getBoundingClientRect()
-    const x = (event.clientX - rect.left) / rect.width - 0.5
-    const y = (event.clientY - rect.top) / rect.height - 0.5
-    el.style.transform = `perspective(1400px) rotateX(${(y * -8).toFixed(2)}deg) rotateY(${(x * 10).toFixed(2)}deg) scale(1.015)`
-  }
-
-  function handlePointerLeave(): void {
-    const el = containerRef.current
-    if (el) el.style.transform = 'perspective(1400px) rotateX(0deg) rotateY(0deg) scale(1)'
-  }
+  }, [activeSkin])
 
   return (
-    <div className={`space-y-4 rounded-[4px] border ${theme.border} bg-gradient-to-br ${theme.shell} p-4 shadow-[0_18px_60px_rgba(0,0,0,0.5)]`}>
+    <div className={`signal-core space-y-4 rounded-[4px] border ${theme.border} bg-gradient-to-br ${theme.shell} p-4 shadow-[0_18px_60px_rgba(0,0,0,0.5)]`}>
       <div className="space-y-4">
         <div className="relative overflow-hidden rounded-[4px] border border-white/10 bg-black p-4">
           <div className="relative flex items-start justify-between gap-4">
@@ -410,13 +411,11 @@ export function AICoreNode({
           </div>
 
           <div className="relative mt-4">
-            <div ref={containerRef} onPointerMove={handlePointerMove} onPointerLeave={handlePointerLeave}
-              className="relative mx-auto w-full max-w-[980px] transition-transform duration-200 ease-out"
-              style={{ aspectRatio: '2 / 1', transform: 'perspective(1400px) rotateX(0deg) rotateY(0deg) scale(1)' }}>
-              <div onClick={disabled ? undefined : onRequestBriefing} role="button" tabIndex={disabled ? -1 : 0}
-                className={`group absolute inset-0 overflow-hidden rounded-[4px] border border-white/8 bg-black transition-all ${disabled ? 'cursor-not-allowed opacity-80' : 'cursor-pointer hover:border-white/16'}`}>
-                <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
-              </div>
+            <div className="relative mx-auto w-full max-w-[980px]" style={{ aspectRatio: '2 / 1' }}>
+              <button type="button" onClick={onRequestBriefing} disabled={disabled} aria-label="Request system briefing"
+                className={`group absolute inset-0 overflow-hidden rounded-[4px] border border-white/8 bg-black transition-colors focus-visible:outline-2 focus-visible:outline-[var(--helm-accent)] ${disabled ? 'cursor-not-allowed opacity-80' : 'cursor-pointer hover:border-white/16'}`}>
+                <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" aria-hidden="true" />
+              </button>
 
               <div className="absolute inset-0 pointer-events-none">
                 <div className="pointer-events-auto absolute inset-x-3 bottom-2 flex flex-wrap items-end justify-between gap-2">
@@ -424,25 +423,25 @@ export function AICoreNode({
                     <div className="rounded-[2px] border border-white/10 bg-black/70 px-2 py-0.5 text-[8px] uppercase tracking-[0.14em] text-gray-400 font-[family-name:var(--helm-font-mono)]">Mech Entity</div>
                     {kindCounts.workspace > 0 && (
                       <span className="flex items-center gap-1 rounded-[2px] border border-white/10 bg-black/65 px-1.5 py-0.5 text-[8px] uppercase tracking-[0.1em] text-gray-400 font-[family-name:var(--helm-font-mono)]">
-                        <span className="inline-block h-1.5 w-1.5 rounded-[1px]" style={{ background: KIND_COLORS.workspace }} />
+                        <span className="inline-block h-1.5 w-1.5 rounded-[1px]" style={{ background: activeSkin === 'signal' ? 'var(--helm-accent)' : KIND_COLORS.workspace }} />
                         WS {kindCounts.workspace}
                       </span>
                     )}
                     {kindCounts.agent > 0 && (
                       <span className="flex items-center gap-1 rounded-[2px] border border-white/10 bg-black/65 px-1.5 py-0.5 text-[8px] uppercase tracking-[0.1em] text-gray-400 font-[family-name:var(--helm-font-mono)]">
-                        <span className="inline-block h-1.5 w-1.5 rounded-[1px]" style={{ background: KIND_COLORS.agent }} />
+                        <span className="inline-block h-1.5 w-1.5 rounded-[1px]" style={{ background: activeSkin === 'signal' ? '#6ed9c4' : KIND_COLORS.agent }} />
                         AG {kindCounts.agent}
                       </span>
                     )}
                     {kindCounts.port > 0 && (
                       <span className="flex items-center gap-1 rounded-[2px] border border-white/10 bg-black/65 px-1.5 py-0.5 text-[8px] uppercase tracking-[0.1em] text-gray-400 font-[family-name:var(--helm-font-mono)]">
-                        <span className="inline-block h-1.5 w-1.5 rounded-[1px]" style={{ background: KIND_COLORS.port }} />
+                        <span className="inline-block h-1.5 w-1.5 rounded-[1px]" style={{ background: activeSkin === 'signal' ? 'var(--helm-accent)' : KIND_COLORS.port }} />
                         PT {kindCounts.port}
                       </span>
                     )}
                     {kindCounts.git > 0 && (
                       <span className="flex items-center gap-1 rounded-[2px] border border-white/10 bg-black/65 px-1.5 py-0.5 text-[8px] uppercase tracking-[0.1em] text-gray-400 font-[family-name:var(--helm-font-mono)]">
-                        <span className="inline-block h-1.5 w-1.5 rounded-[1px]" style={{ background: KIND_COLORS.git }} />
+                        <span className="inline-block h-1.5 w-1.5 rounded-[1px]" style={{ background: activeSkin === 'signal' ? 'var(--helm-accent)' : KIND_COLORS.git }} />
                         GIT {kindCounts.git}
                       </span>
                     )}

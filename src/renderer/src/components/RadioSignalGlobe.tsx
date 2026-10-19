@@ -4,6 +4,8 @@ import { feature } from 'topojson-client'
 import landAtlas from 'world-atlas/land-110m.json'
 import type { RadioHomeLocation } from '../../../shared/types'
 import type { RadioStation } from '../panels/fm-stations'
+import { useSkinStore } from '../stores/skin'
+import { startVisualAnimation, type VisualAnimation } from './visual-motion'
 
 const TAU = Math.PI * 2
 const ROUTE_SAMPLE_COUNT = 72
@@ -196,7 +198,7 @@ export function RadioSignalGlobe({
   homeLocation
 }: RadioSignalGlobeProps): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const animationRef = useRef(0)
+  const activeSkin = useSkinStore((s) => s.activeSkin)
   const deviceLocation = useMemo<DeviceLocation | null>(() => {
     if (!homeLocation) return null
     return {
@@ -211,42 +213,44 @@ export function RadioSignalGlobe({
     const canvas = canvasRef.current
     if (!canvas) return
 
+    let animation: VisualAnimation | undefined
     const resize = (): void => {
       const parent = canvas.parentElement
       if (!parent) return
-      const dpr = window.devicePixelRatio || 1
+      const dpr = Math.min(window.devicePixelRatio || 1, 2)
       const width = parent.clientWidth
       const height = Math.max(220, parent.clientHeight)
       canvas.width = width * dpr
       canvas.height = height * dpr
       canvas.style.width = `${width}px`
       canvas.style.height = `${height}px`
+      animation?.redraw()
     }
 
     resize()
-    window.addEventListener('resize', resize)
+    const observer = new ResizeObserver(resize)
+    if (canvas.parentElement) observer.observe(canvas.parentElement)
+    const context = canvas.getContext('2d')
+    if (!context) { observer.disconnect(); return }
+    const style = getComputedStyle(canvas)
+    const accent = style.getPropertyValue('--helm-accent')
+    const dim = style.getPropertyValue('--helm-shell-muted')
+    const route = stationCoords && deviceLocation ? buildRouteLine(stationCoords, deviceLocation.coords) : null
 
-    const render = (): void => {
-      const context = canvas.getContext('2d')
-      if (!context) return
-
-      const dpr = window.devicePixelRatio || 1
+    const render = (time: number): void => {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2)
       const width = canvas.width / dpr
       const height = canvas.height / dpr
-      const time = performance.now() / 1000
       const cx = width / 2
       const cy = height / 2
       const radius = Math.min(cx, cy) * 0.78
-      const style = getComputedStyle(canvas)
-      const accent = style.getPropertyValue('--winamp-blue-bright')
-      const dim = style.getPropertyValue('--winamp-screen-dim')
 
-      const atmosphere = colorWithAlpha(accent, 0.15, 'rgba(135, 212, 255, 0.15)')
-      const landFill = colorWithAlpha(accent, 0.18, 'rgba(121, 187, 255, 0.18)')
-      const coastlineStroke = colorWithAlpha(accent, 0.56, 'rgba(170, 220, 255, 0.56)')
-      const gridStroke = colorWithAlpha(dim, 0.16, 'rgba(124, 160, 210, 0.16)')
-      const rimStroke = colorWithAlpha(accent, 0.3, 'rgba(170, 220, 255, 0.3)')
-      const routeStroke = 'rgba(255, 212, 120, 0.88)'
+      const atmosphere = colorWithAlpha(accent, 0.15, 'rgba(216, 239, 138, 0.15)')
+      const landFill = colorWithAlpha(accent, 0.18, 'rgba(216, 239, 138, 0.18)')
+      const coastlineStroke = colorWithAlpha(accent, 0.56, 'rgba(216, 239, 138, 0.56)')
+      const gridStroke = colorWithAlpha(dim, 0.16, 'rgba(113, 131, 120, 0.16)')
+      const rimStroke = colorWithAlpha(accent, 0.3, 'rgba(216, 239, 138, 0.3)')
+      const routeStroke = 'rgba(110, 217, 196, 0.88)'
 
       const projection = geoOrthographic()
         .translate([cx, cy])
@@ -281,9 +285,9 @@ export function RadioSignalGlobe({
         cy,
         radius * 1.05
       )
-      globeGradient.addColorStop(0, 'rgba(35, 45, 70, 0.98)')
-      globeGradient.addColorStop(0.6, 'rgba(12, 18, 30, 0.96)')
-      globeGradient.addColorStop(1, 'rgba(5, 8, 16, 0.98)')
+      globeGradient.addColorStop(0, 'rgba(35, 45, 38, 0.98)')
+      globeGradient.addColorStop(0.6, 'rgba(15, 21, 17, 0.96)')
+      globeGradient.addColorStop(1, 'rgba(8, 12, 9, 0.98)')
       context.fillStyle = globeGradient
       context.fill()
 
@@ -318,11 +322,10 @@ export function RadioSignalGlobe({
       context.lineWidth = 1.05
       context.stroke()
 
-      if (stationCoords && deviceLocation) {
-        const route = buildRouteLine(stationCoords, deviceLocation.coords)
+      if (route && stationCoords && deviceLocation) {
         context.beginPath()
         path(route as any)
-        context.strokeStyle = 'rgba(255, 212, 120, 0.22)'
+        context.strokeStyle = 'rgba(110, 217, 196, 0.22)'
         context.lineWidth = 4.6
         context.stroke()
 
@@ -336,20 +339,20 @@ export function RadioSignalGlobe({
         context.setLineDash([])
 
         drawMarker(context, projection, stationCoords, {
-          haloColor: 'rgba(94, 179, 255, 0.14)',
-          coreColor: 'rgba(135, 212, 255, 0.95)'
+          haloColor: atmosphere,
+          coreColor: colorWithAlpha(accent, 0.95, '#d8ef8a')
         })
       } else if (stationCoords) {
         drawMarker(context, projection, stationCoords, {
-          haloColor: 'rgba(94, 179, 255, 0.14)',
-          coreColor: 'rgba(135, 212, 255, 0.95)'
+          haloColor: atmosphere,
+          coreColor: colorWithAlpha(accent, 0.95, '#d8ef8a')
         })
       }
 
       if (deviceLocation) {
         drawMarker(context, projection, deviceLocation.coords, {
-          haloColor: 'rgba(255, 212, 120, 0.16)',
-          coreColor: 'rgba(255, 212, 120, 0.96)',
+          haloColor: 'rgba(110, 217, 196, 0.16)',
+          coreColor: 'rgba(110, 217, 196, 0.96)',
           pulseScale: 3.4,
           time
         })
@@ -363,17 +366,15 @@ export function RadioSignalGlobe({
       context.lineWidth = 1.2
       context.stroke()
       context.restore()
-
-      animationRef.current = requestAnimationFrame(render)
     }
 
-    animationRef.current = requestAnimationFrame(render)
-
+    // The route is geographic context, so keep it still instead of implying live telemetry.
+    animation = startVisualAnimation(canvas, render, () => false)
     return () => {
-      cancelAnimationFrame(animationRef.current)
-      window.removeEventListener('resize', resize)
+      animation?.dispose()
+      observer.disconnect()
     }
-  }, [deviceLocation, stationCoords])
+  }, [deviceLocation, stationCoords, activeSkin])
 
   const pathValue = useMemo(() => {
     if (stationCoords && deviceLocation) {
@@ -408,7 +409,7 @@ export function RadioSignalGlobe({
   return (
     <div className="winamp-signal-layout">
       <div className="winamp-signal-canvas-shell">
-        <canvas ref={canvasRef} className="winamp-signal-canvas" />
+        <canvas ref={canvasRef} className="winamp-signal-canvas" aria-hidden="true" />
       </div>
 
       <div className="winamp-signal-readout">

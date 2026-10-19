@@ -244,7 +244,7 @@ const api = {
     ipcRenderer.invoke(IPC_CHANNELS.VAULT_PULL_SYNC),
 
   // HIVE
-  hiveLaunchState: (): Promise<{ enabled: boolean }> => ipcRenderer.invoke(IPC_CHANNELS.HIVE_LAUNCH_STATE),
+  hiveLaunchState: (): Promise<{ enabled: boolean; reason?: string }> => ipcRenderer.invoke(IPC_CHANNELS.HIVE_LAUNCH_STATE),
 
   hiveRetry: (sessionId: string): Promise<HiveSpawnResult> => ipcRenderer.invoke(IPC_CHANNELS.HIVE_RETRY, sessionId),
 
