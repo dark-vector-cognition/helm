@@ -107,7 +107,7 @@ export function BriefingPanel({ variant = 'compact' }: BriefingPanelProps): JSX.
       const result = await window.helm.requestBriefing()
       if (result) {
         setBriefing(result)
-        pulseCore('speaking')
+        pulseCore(result.model ? 'speaking' : 'offline')
       } else {
         setError('No system state available yet')
       }
@@ -117,7 +117,7 @@ export function BriefingPanel({ variant = 'compact' }: BriefingPanelProps): JSX.
       setLoading(false)
       refreshConfig().catch(() => {})
     }
-  }, [refreshConfig])
+  }, [refreshConfig, pulseCore])
 
   const healLmStudio = useCallback(async (): Promise<void> => {
     setHealing(true)
