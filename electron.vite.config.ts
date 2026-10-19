@@ -5,7 +5,8 @@ import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin()]
+    plugins: [externalizeDepsPlugin()],
+    build: { rollupOptions: { input: { index: resolve('src/main/index.ts'), 'hive-worker': resolve('src/main/hive/worker.ts') } } }
   },
   preload: {
     plugins: [externalizeDepsPlugin()]
