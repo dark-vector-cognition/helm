@@ -1,6 +1,6 @@
 {
   "name": "helm",
-  "version": "6.0.0-rc.3",
+  "version": "6.0.0-rc.4",
   "description": "HELM: Operator shell for local AI systems, processes, ports, and git repos",
   "main": "./out/main/index.js",
   "author": "Dark Vector Cognition LLC",
