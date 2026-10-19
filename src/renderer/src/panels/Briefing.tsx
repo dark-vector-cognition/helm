@@ -44,6 +44,7 @@ export function BriefingPanel({ variant = 'compact' }: BriefingPanelProps): JSX.
   const [lmStudioUrl, setLmStudioUrl] = useState<string>('http://localhost:1234')
   // The model is optional. Until an endpoint is configured (or found), say so plainly.
   const [modelConfigured, setModelConfigured] = useState(false)
+  const [configuredModel, setConfiguredModel] = useState('')
   const [recentCoreMode, setRecentCoreMode] = useState<AICoreMode | null>(null)
   const [monoLattice, setMonoLattice] = useState(false)
   const coreTimerRef = useRef<number | null>(null)
@@ -68,6 +69,7 @@ export function BriefingPanel({ variant = 'compact' }: BriefingPanelProps): JSX.
 
   const refreshConfig = useCallback(async (): Promise<void> => {
     const cfg = await window.helm.getConfig()
+    setConfiguredModel(cfg.lmStudioModel || '')
     if (cfg.lmStudioUrl) {
       setLmStudioUrl(cfg.lmStudioUrl)
       setModelConfigured(true)
@@ -256,6 +258,12 @@ export function BriefingPanel({ variant = 'compact' }: BriefingPanelProps): JSX.
               {coreMode === 'throughput' ? 'HELM Alive' : MODE_LABELS[coreMode]}
             </span>
           </div>
+        </div>
+      )}
+
+      {(briefing?.model || configuredModel) && (
+        <div className="mb-3 text-xs shell-subtle" role="status">
+          {briefing?.model ? `Response from ${briefing.model}` : `Model: ${configuredModel}`}
         </div>
       )}
 

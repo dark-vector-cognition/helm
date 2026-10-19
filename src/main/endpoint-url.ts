@@ -37,7 +37,9 @@ export function normalizeEndpointUrl(raw: unknown): string | null {
 export function envKeyWithEndpoint(
   env: Record<string, string | undefined> = process.env
 ): { key: string; url: string } | undefined {
-  const key = env.LLM_API_KEY?.trim()
   const url = normalizeEndpointUrl(env.LM_STUDIO_URL)
+  const providerKey = url === 'https://openrouter.ai/api' ? env.OPENROUTER_API_KEY
+    : url === 'https://api.deepseek.com' ? env.DEEPSEEK_API_KEY : undefined
+  const key = env.LLM_API_KEY?.trim() || providerKey?.trim()
   return key && url ? { key, url } : undefined
 }
