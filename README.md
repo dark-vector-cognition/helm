@@ -2,7 +2,7 @@
 
 HELM is a desktop ops shell for developers running AI agents, local services, and multi-machine model workflows. It keeps overall system status visible while giving each domain its own page instead of forcing everything into one dense dashboard.
 
-Current version: `5.0.0`. Helm Light is free and open source under [Apache-2.0](LICENSE).
+Current version: `6.0.0`. Helm Light is free and open source under [Apache-2.0](LICENSE).
 
 [Product page, demo and roadmap](https://darkvectorcognition.ai/helm/).
 
@@ -18,6 +18,21 @@ HELM is free and open source. [Support HELM](https://darkvectorcognition.ai/helm
 
 Need Helm for your team? [Discuss enterprise with DVC](https://darkvectorcognition.ai/helm/#enterprise).
 
+## What's new in 6.0
+
+- **Supervised agent runs.** Start a bounded run for Claude Code, Cursor or Codex with an explicit workspace, permission mode and time limit. A returned result waits for your review. Run journals recover after a restart, and quitting HELM stops managed work.
+- **Signal interface.** A graphite shell with clearer navigation and a full-width run workspace. Visuals pause when hidden and respect reduced motion.
+- **Pinned AI model.** Briefings can use one named model from a compatible provider. Hosted briefings send CPU and memory totals only.
+- **Optional support.** A Support HELM link sits beside the team enquiry link. Every feature stays free.
+- **Signed Mac download.** The macOS DMG on the GitHub release is signed with a Developer ID and notarized by Apple.
+- **Windows executable name.** The Windows app is now `helm-light.exe`, so it does not collide with the Kubernetes `helm` command.
+
+Windows managed launch is not available yet. Monitoring works on Windows. Details are in the [CHANGELOG](CHANGELOG.md).
+
+## Download
+
+Download the macOS DMG (Apple Silicon) from the [latest release](https://github.com/dark-vector-cognition/helm/releases/latest). Open it and drag HELM to Applications.
+
 ## What's new in 5.0
 
 For anyone who cloned an earlier version:
@@ -27,7 +42,7 @@ For anyone who cloned an earlier version:
 - **Electron 41.** Electron 35 to 41.10.7, with `better-sqlite3` 12.11.1 and refreshed build tooling. Node.js 22.12 or newer is now required.
 - **Fixes and platform work.** Windows code paths for the port, network, process, battery, disk, and firewall monitors, tighter agent detection, quieter notifications, and a guard so a blank remote vault host can never start an `ssh` call. Details are in the [CHANGELOG](CHANGELOG.md).
 
-Signed distribution, auto-update and support remain future packaging proposals. No delivery date is announced. See the [proposed roadmap](docs/ROADMAP.md).
+Auto-update remains a future packaging proposal. No delivery date is announced. See the [proposed roadmap](docs/ROADMAP.md).
 
 ## Quick Start (2 minutes)
 

@@ -36,13 +36,22 @@ mac:
   target: dmg
   icon: build/icon.icns
   category: public.app-category.developer-tools
+  # Developer ID signing. A missing identity fails the build instead of shipping unsigned.
+  identity: Dark Vector Cognition LLC (WA6GHCR9GV)
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
     - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
     - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
-  notarize: false
+    - NSAppleEventsUsageDescription: HELM opens Terminal to attach to agent sessions.
+  # Notarization runs only when APPLE_KEYCHAIN_PROFILE is set (notarytool keychain profile).
+  # scripts/build-mac-release.sh sets it, defaulting to helm-notary. No credentials live here.
+  notarize: true
 dmg:
-  artifactName: ${name}-${version}.${ext}
+  artifactName: ${name}-${version}-${arch}.${ext}
+  sign: true
 linux:
   target:
     - AppImage

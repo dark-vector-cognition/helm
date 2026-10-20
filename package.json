@@ -1,6 +1,6 @@
 {
   "name": "helm",
-  "version": "6.0.0-rc.4",
+  "version": "6.0.0",
   "description": "HELM: Operator shell for local AI systems, processes, ports, and git repos",
   "main": "./out/main/index.js",
   "author": "Dark Vector Cognition LLC",
@@ -31,6 +31,7 @@
     "build:unpack": "npm run build && electron-builder --dir",
     "build:win": "npm run build && electron-builder --win",
     "build:mac": "npm run build && electron-builder --mac",
+    "release:mac": "scripts/build-mac-release.sh",
     "build:linux": "npm run build && electron-builder --linux",
     "pretest": "npm run rebuild:node 2>/dev/null || true",
     "test": "vitest run",

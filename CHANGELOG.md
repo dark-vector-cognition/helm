@@ -2,6 +2,35 @@
 
 Entries are ordered newest first. `Unreleased` covers mainline work after the latest tagged release, and tagged dates are written in America/Chicago local time.
 
+## v6.0.0 - Unreleased
+
+HELM V6: supervised agent runs, the Signal interface and a signed Mac download.
+
+### Agent Supervision
+- Bounded local runs for Claude Code, Cursor and Codex with an explicit provider, workspace, permission mode and time limit
+- Distinct stages for acceptance, work, returned result and operator review. A process start does not count as acceptance
+- Stop waits for the provider to exit. Retry keeps the earlier record
+- Private run journals recover after a restart. Closing the window keeps managed work in the tray; quitting stops it
+- Windows managed launch is unavailable. Windows monitoring remains available
+
+### Signal Interface
+- Graphite shell, restrained lime accent, clearer navigation and a full-width run workspace
+- Visuals pause when hidden or off screen, respect reduced motion and animate only during activity
+- The palette applies before canvas effects read it. Page navigation resets scroll position
+
+### AI Connection
+- Briefings can pin one named model instead of the first catalog entry. A successful briefing names its model
+- Empty responses show a failure, never Briefing Ready
+- Provider environment keys apply only to their exact HTTPS endpoints. Hosted briefings send CPU and memory totals only
+
+### Support
+- Optional Support HELM link beside the team enquiry link. No feature gates
+
+### Packaging
+- macOS: Developer ID signing, hardened runtime and notarization through a notarytool keychain profile (`scripts/build-mac-release.sh`). The DMG name now includes the architecture
+- macOS: Apple Events entitlement and usage text so HELM can open Terminal for agent sessions under the hardened runtime
+- Windows: the executable is now `helm-light.exe` to avoid a collision with the Kubernetes `helm` command. The application ID is unchanged for upgrades
+
 ## v5.0.0 - 2026-10-16
 
 Helm Light: the open-source release.
