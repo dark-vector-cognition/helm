@@ -14,6 +14,8 @@ Current version: `5.0.0`. Helm Light is free and open source under [Apache-2.0](
 
 The demo and screenshots show a review build based on `5.0.0`, including fixes that have not shipped. Dates in the demo are 2026 roadmap targets, not release promises. See the [roadmap and release status](docs/ROADMAP.md).
 
+HELM is free and open source. [Support HELM](https://darkvectorcognition.ai/helm/#support) with an optional contribution.
+
 Need Helm for your team? [Discuss enterprise with DVC](https://darkvectorcognition.ai/helm/#enterprise).
 
 ## What's new in 5.0

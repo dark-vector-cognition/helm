@@ -63,6 +63,15 @@ describe('healLmStudioConnection', () => {
     )
   })
 
+  it('pins the configured model instead of using the first catalog entry', async () => {
+    loadConfig.mockReturnValue({ lmStudioUrl: 'https://api.example.com', lmStudioModel: 'deepseek/chosen-fixture', apiKey: 'fixture' })
+    const fetchImpl = vi.fn(async () => ({ ok: true, json: async () => ({ data: [{ id: 'unrelated-first' }, { id: 'deepseek/chosen-fixture' }] }) }) as Response)
+    const { healLmStudioConnection } = await import('./lmstudio')
+    const result = await healLmStudioConnection({ fetchImpl: fetchImpl as typeof fetch })
+    expect(result.model).toBe('deepseek/chosen-fixture')
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+  })
+
   it('does not rewrite config when the configured endpoint is already healthy', async () => {
     const fetchImpl = vi.fn(async () => {
       return {

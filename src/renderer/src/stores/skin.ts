@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
-export type HelmSkinId = 'classic' | 'glass' | 'forge' | 'phantom'
+export type HelmSkinId = 'signal' | 'classic' | 'glass' | 'forge' | 'phantom'
 
 export interface HelmSkinOption {
   id: HelmSkinId
@@ -11,6 +11,12 @@ export interface HelmSkinOption {
 }
 
 export const HELM_SKINS: HelmSkinOption[] = [
+  {
+    id: 'signal',
+    label: 'Signal',
+    blurb: 'Graphite, clear signals and a deliberate lime accent',
+    palette: ['#121413', '#d8ef8a', '#202421']
+  },
   {
     id: 'classic',
     label: 'Deck',
@@ -45,11 +51,14 @@ interface SkinStore {
 export const useSkinStore = create<SkinStore>()(
   persist(
     (set) => ({
-      activeSkin: 'classic',
+      activeSkin: 'signal',
       setActiveSkin: (skin) => set({ activeSkin: skin })
     }),
     {
-      name: 'helm-shell-skin'
+      name: 'helm-shell-skin',
+      version: 1,
+      // V6 adopts Signal; the previous palettes remain available in the selector.
+      migrate: () => ({ activeSkin: 'signal' })
     }
   )
 )

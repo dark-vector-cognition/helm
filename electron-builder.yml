@@ -26,7 +26,7 @@ extraResources:
     filter:
       - lulu-parser.py
 win:
-  executableName: helm
+  executableName: helm-light
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}

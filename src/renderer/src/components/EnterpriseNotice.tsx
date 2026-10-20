@@ -1,15 +1,21 @@
 export function EnterpriseNotice(): JSX.Element {
   return (
-    <section className="shell-enterprise" aria-label="HELM editions">
+    <section className="shell-enterprise" aria-label="Support HELM">
       <p className="shell-enterprise-label">HELM Light · Free &amp; open source</p>
-      <p>Need HELM for your team?</p>
+      <p>Support its development. Contributions are optional.</p>
       <a
-        href="https://darkvectorcognition.ai/helm/#enterprise"
+        href="https://darkvectorcognition.ai/helm/#support"
         target="_blank"
         rel="noopener noreferrer"
       >
-        Discuss enterprise with DVC ↗
+        Support HELM ↗
       </a>
+      <p>
+        For teams:{' '}
+        <a href="https://darkvectorcognition.ai/helm/#enterprise" target="_blank" rel="noopener noreferrer">
+          Discuss enterprise with DVC ↗
+        </a>
+      </p>
     </section>
   )
 }
