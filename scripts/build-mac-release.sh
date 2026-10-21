@@ -47,7 +47,8 @@ rm -rf dist
 npm run build
 # npmRebuild is false, and npm test builds better-sqlite3 for Node. Build it for Electron.
 npm run rebuild:electron
-npx electron-builder --mac dmg "--${ARCH}" ${BUILDER_ARGS[@]+"${BUILDER_ARGS[@]}"}
+# A local build never uploads. Without this, electron-builder publishes when a CI tag variable is set.
+npx electron-builder --mac dmg "--${ARCH}" --publish never ${BUILDER_ARGS[@]+"${BUILDER_ARGS[@]}"}
 
 # 3. Notarize and staple the DMG itself
 if [[ "$NOTARIZE" == 1 ]]; then
