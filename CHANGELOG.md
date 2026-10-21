@@ -2,9 +2,9 @@
 
 Entries are ordered newest first. `Unreleased` covers mainline work after the latest tagged release, and tagged dates are written in America/Chicago local time.
 
-## v6.0.0 - Unreleased
+## v6.0.0 - 2026-10-21
 
-HELM V6: supervised agent runs, the Signal interface and a signed Mac download.
+HELM V6: supervised agent runs, the Signal interface and a signed Mac download. Download it from the [v6.0.0 release](https://github.com/dark-vector-cognition/helm/releases/tag/v6.0.0).
 
 ### Agent Supervision
 - Bounded local runs for Claude Code, Cursor and Codex with an explicit provider, workspace, permission mode and time limit
