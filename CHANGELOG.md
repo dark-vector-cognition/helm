@@ -21,7 +21,7 @@ HELM V6: supervised agent runs, the Signal interface and a signed Mac download.
 ### AI Connection
 - Briefings can pin one named model instead of the first catalog entry. A successful briefing names its model
 - Empty responses show a failure, never Briefing Ready
-- Provider environment keys apply only to their exact HTTPS endpoints. Hosted briefings send CPU and memory totals only
+- Provider environment keys apply only to their exact HTTPS endpoints. A briefing to any endpoint outside this machine and the local network sends CPU and memory totals only
 
 ### Support
 - Optional Support HELM link beside the team enquiry link. No feature gates
@@ -29,6 +29,7 @@ HELM V6: supervised agent runs, the Signal interface and a signed Mac download.
 ### Packaging
 - macOS: Developer ID signing, hardened runtime and notarization through a notarytool keychain profile (`scripts/build-mac-release.sh`). The DMG name now includes the architecture
 - macOS: Apple Events entitlement and usage text so HELM can open Terminal for agent sessions under the hardened runtime
+- macOS: a Mac build fails without the Developer ID identity (`forceCodeSigning`). The release workflow no longer publishes on a tag push
 - Windows: the executable is now `helm-light.exe` to avoid a collision with the Kubernetes `helm` command. The application ID is unchanged for upgrades
 
 ## v5.0.0 - 2026-10-16

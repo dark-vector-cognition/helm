@@ -22,16 +22,16 @@ Need Helm for your team? [Discuss enterprise with DVC](https://darkvectorcogniti
 
 - **Supervised agent runs.** Start a bounded run for Claude Code, Cursor or Codex with an explicit workspace, permission mode and time limit. A returned result waits for your review. Run journals recover after a restart, and quitting HELM stops managed work.
 - **Signal interface.** A graphite shell with clearer navigation and a full-width run workspace. Visuals pause when hidden and respect reduced motion.
-- **Pinned AI model.** Briefings can use one named model from a compatible provider. Hosted briefings send CPU and memory totals only.
+- **Pinned AI model.** Briefings can use one named model from a compatible provider. A briefing to a hosted endpoint sends CPU and memory totals only. Hosted means any endpoint outside this machine and the local network (see [Optional Model](#optional-model)).
 - **Optional support.** A Support HELM link sits beside the team enquiry link. Every feature stays free.
-- **Signed Mac download.** The macOS DMG on the GitHub release is signed with a Developer ID and notarized by Apple.
+- **Signed Mac download (pending).** The 6.0.0 macOS DMG is built with Developer ID signing and Apple notarization. It is not published yet. See [Download](#download).
 - **Windows executable name.** The Windows app is now `helm-light.exe`, so it does not collide with the Kubernetes `helm` command.
 
 Windows managed launch is not available yet. Monitoring works on Windows. Details are in the [CHANGELOG](CHANGELOG.md).
 
 ## Download
 
-Download the macOS DMG (Apple Silicon) from the [latest release](https://github.com/dark-vector-cognition/helm/releases/latest). Open it and drag HELM to Applications.
+Pending: the 6.0.0 macOS DMG (Apple Silicon) is not published yet. This section will link to the release when it exists and its notarization is verified. Until then, build from source with the [Quick Start](#quick-start-2-minutes).
 
 ## What's new in 5.0
 
@@ -121,6 +121,7 @@ To turn on AI briefings, point HELM at any OpenAI-compatible server. No cloud in
 - Once an endpoint is configured, `Invoke Repair` probes it plus local and LAN-discovered fallbacks, and saves a repaired URL when it finds a healthy server. When an API key is set, it checks only the configured endpoint
 - An API key belongs to the endpoint it was saved for: if a save changes `lmStudioUrl` without sending a new key, HELM deletes the stored key so it cannot be sent to a different host
 - `LLM_API_KEY` applies only together with `LM_STUDIO_URL`, and it is sent only to that endpoint. Without `LM_STUDIO_URL`, or with one that is not a valid URL, it is ignored
+- Privacy: a full briefing (process groups, agents, workspace paths, repository names, branches and ports) goes only to a local endpoint: `localhost`, a `.local` name, or a loopback, private or link-local IP address. Every other endpoint is hosted and receives CPU and memory totals only. A bare host name such as `http://gpu-box:1234` also counts as hosted, so use its `.local` name or IP address to get full briefings on your network
 
 For cross-machine setups, enable network serving on the model host and make sure the chosen port is reachable through the host firewall.
 
