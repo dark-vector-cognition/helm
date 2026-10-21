@@ -26,7 +26,7 @@ extraResources:
     filter:
       - lulu-parser.py
 win:
-  executableName: helm
+  executableName: helm-light
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}
@@ -36,13 +36,25 @@ mac:
   target: dmg
   icon: build/icon.icns
   category: public.app-category.developer-tools
+  # Developer ID signing. forceCodeSigning fails the build when the identity is missing,
+  # so a Mac build never ships unsigned.
+  identity: Dark Vector Cognition LLC (WA6GHCR9GV)
+  forceCodeSigning: true
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
-    - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
-    - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
-  notarize: false
+    NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
+    NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
+    NSAppleEventsUsageDescription: HELM opens Terminal to attach to agent sessions.
+  # electron-builder skips notarization with only a warning when APPLE_KEYCHAIN_PROFILE is unset.
+  # scripts/build-mac-release.sh sets it (default helm-notary) and then checks the result with
+  # spctl and stapler. No credentials live here.
+  notarize: true
 dmg:
-  artifactName: ${name}-${version}.${ext}
+  artifactName: ${name}-${version}-${arch}.${ext}
+  sign: true
 linux:
   target:
     - AppImage

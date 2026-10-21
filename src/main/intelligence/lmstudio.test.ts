@@ -63,6 +63,38 @@ describe('healLmStudioConnection', () => {
     )
   })
 
+  it('pins the configured model instead of using the first catalog entry', async () => {
+    loadConfig.mockReturnValue({ lmStudioUrl: 'https://api.example.com', lmStudioModel: 'deepseek/chosen-fixture', apiKey: 'fixture' })
+    const fetchImpl = vi.fn(async () => ({ ok: true, json: async () => ({ data: [{ id: 'unrelated-first' }, { id: 'deepseek/chosen-fixture' }] }) }) as Response)
+    const { healLmStudioConnection } = await import('./lmstudio')
+    const result = await healLmStudioConnection({ fetchImpl: fetchImpl as typeof fetch })
+    expect(result.model).toBe('deepseek/chosen-fixture')
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+  })
+
+  it('uses the fallback catalog model, not the pin, when the configured hosted endpoint is down', async () => {
+    loadConfig.mockReturnValue({ lmStudioUrl: 'https://api.example.com', lmStudioModel: 'deepseek/chosen-fixture' })
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url === 'https://api.example.com/v1/models') throw new Error('fetch failed')
+      return { ok: true, json: async () => ({ data: [{ id: 'qwen-local' }] }) } as Response
+    })
+    const { healLmStudioConnection } = await import('./lmstudio')
+
+    const result = await healLmStudioConnection({ persist: true, fetchImpl: fetchImpl as typeof fetch })
+    expect(result.repaired).toBe(true)
+    expect(result.url).toBe('http://localhost:1234')
+    expect(result.model).toBe('qwen-local')
+
+    // The saved repair drops the pin, so the next briefing still uses the fallback's own model.
+    const saved = saveConfig.mock.calls[0][0]
+    expect(saved).toMatchObject({ lmStudioUrl: 'http://localhost:1234' })
+    expect(saved).not.toHaveProperty('lmStudioModel')
+    loadConfig.mockReturnValue(saved)
+    const next = await healLmStudioConnection({ fetchImpl: fetchImpl as typeof fetch })
+    expect(next.url).toBe('http://localhost:1234')
+    expect(next.model).toBe('qwen-local')
+  })
+
   it('does not rewrite config when the configured endpoint is already healthy', async () => {
     const fetchImpl = vi.fn(async () => {
       return {

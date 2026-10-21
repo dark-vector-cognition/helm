@@ -2,7 +2,7 @@
 
 HELM is a desktop ops shell for developers running AI agents, local services, and multi-machine model workflows. It keeps overall system status visible while giving each domain its own page instead of forcing everything into one dense dashboard.
 
-Current version: `5.0.0`. Helm Light is free and open source under [Apache-2.0](LICENSE).
+Current version: `6.0.0`. Helm Light is free and open source under [Apache-2.0](LICENSE).
 
 [Product page, demo and roadmap](https://darkvectorcognition.ai/helm/).
 
@@ -14,7 +14,24 @@ Current version: `5.0.0`. Helm Light is free and open source under [Apache-2.0](
 
 The demo and screenshots show a review build based on `5.0.0`, including fixes that have not shipped. Dates in the demo are 2026 roadmap targets, not release promises. See the [roadmap and release status](docs/ROADMAP.md).
 
+HELM is free and open source. [Support HELM](https://darkvectorcognition.ai/helm/#support) with an optional contribution.
+
 Need Helm for your team? [Discuss enterprise with DVC](https://darkvectorcognition.ai/helm/#enterprise).
+
+## What's new in 6.0
+
+- **Supervised agent runs.** Start a bounded run for Claude Code, Cursor or Codex with an explicit workspace, permission mode and time limit. A returned result waits for your review. Run journals recover after a restart, and quitting HELM stops managed work.
+- **Signal interface.** A graphite shell with clearer navigation and a full-width run workspace. Visuals pause when hidden and respect reduced motion.
+- **Pinned AI model.** Briefings can use one named model from a compatible provider. A briefing to a hosted endpoint sends CPU and memory totals only. Hosted means any endpoint outside this machine and the local network (see [Optional Model](#optional-model)).
+- **Optional support.** A Support HELM link sits beside the team enquiry link. Every feature stays free.
+- **Signed Mac download (pending).** The 6.0.0 macOS DMG is built with Developer ID signing and Apple notarization. It is not published yet. See [Download](#download).
+- **Windows executable name.** The Windows app is now `helm-light.exe`, so it does not collide with the Kubernetes `helm` command.
+
+Windows managed launch is not available yet. Monitoring works on Windows. Details are in the [CHANGELOG](CHANGELOG.md).
+
+## Download
+
+Pending: the 6.0.0 macOS DMG (Apple Silicon) is not published yet. This section will link to the release when it exists and its notarization is verified. Until then, build from source with the [Quick Start](#quick-start-2-minutes).
 
 ## What's new in 5.0
 
@@ -25,7 +42,7 @@ For anyone who cloned an earlier version:
 - **Electron 41.** Electron 35 to 41.10.7, with `better-sqlite3` 12.11.1 and refreshed build tooling. Node.js 22.12 or newer is now required.
 - **Fixes and platform work.** Windows code paths for the port, network, process, battery, disk, and firewall monitors, tighter agent detection, quieter notifications, and a guard so a blank remote vault host can never start an `ssh` call. Details are in the [CHANGELOG](CHANGELOG.md).
 
-Signed distribution, auto-update and support remain future packaging proposals. No delivery date is announced. See the [proposed roadmap](docs/ROADMAP.md).
+Auto-update remains a future packaging proposal. No delivery date is announced. See the [proposed roadmap](docs/ROADMAP.md).
 
 ## Quick Start (2 minutes)
 
@@ -43,9 +60,9 @@ Requires Node.js 22.12 or newer. No model is needed to run HELM. If you want AI 
 
 ## Screenshots
 
-### Bridge
+### Overview
 
-![HELM Bridge with machine load, warnings and the command center](docs/media/helm-bridge.png)
+![HELM Overview with machine load, warnings and the command center](docs/media/helm-bridge.png)
 
 Machine load, warnings and the command center in one view. This capture has no model configured.
 
@@ -67,9 +84,9 @@ Every panel appears on exactly one page. No duplicated widgets, no redundant noi
 
 | Page | What it does |
 |------|-------------|
-| **Bridge** | Mission control: command center, compact AI briefing, notifications |
+| **Overview** | Mission control: command center, compact AI briefing, notifications |
 | **Fleet** | Repo drift and process orchestration: workspaces, git status, commit history |
-| **Swarm** | Agent operations: live agent state, swarm load, session timeline, HIVE control |
+| **Agent runs** | Agent operations: supervised launch, live agent signals, session timeline |
 | **Grid** | Network and ports: scoped traffic topology and listening processes |
 | **AI** | Optional model connection, AI briefings, Claude Code usage tracking |
 | **Vault** | Search and browse an Obsidian vault through a vault-rag server, and push notes into it |
@@ -81,9 +98,9 @@ Operator walkthrough: [docs/OPERATOR-WALKTHROUGH.md](docs/OPERATOR-WALKTHROUGH.m
 
 ## Core Capabilities
 
-- **Bridge** surfaces health, hotspots, command center, and the compact AI briefing
+- **Overview** surfaces health, hotspots, command center, and the compact AI briefing
 - **Fleet** handles repo drift, process orchestration, git status, and commit history
-- **Swarm** discovers supported agent processes and shows task state from fresh agent reports. CPU use does not establish task state. See [agent support and Cursor setup](docs/AGENT-SUPPORT.md). HIVE can launch agents (analyst, architect, builder, ops)
+- **Agent runs** discovers supported agent processes and shows task state from fresh agent reports. CPU use does not establish task state. See [agent support and Cursor setup](docs/AGENT-SUPPORT.md). HIVE can launch agents (analyst, architect, builder, ops). Launch is off by default: set `HELM_HIVE_ENABLED=1` in `.env`, or `"hive": { "enabled": true }` in `~/.config/helm/config.json`. Launch is not available on Windows
 - **Grid** exposes listening ports and scoped traffic topology
 - **AI** centralizes the optional model connection, briefing requests, and Claude Code usage tracking
 - **Vault** searches and browses an Obsidian vault through a local or remote vault-rag server, and can push notes into it
@@ -104,6 +121,9 @@ To turn on AI briefings, point HELM at any OpenAI-compatible server. No cloud in
 - Once an endpoint is configured, `Invoke Repair` probes it plus local and LAN-discovered fallbacks, and saves a repaired URL when it finds a healthy server. When an API key is set, it checks only the configured endpoint
 - An API key belongs to the endpoint it was saved for: if a save changes `lmStudioUrl` without sending a new key, HELM deletes the stored key so it cannot be sent to a different host
 - `LLM_API_KEY` applies only together with `LM_STUDIO_URL`, and it is sent only to that endpoint. Without `LM_STUDIO_URL`, or with one that is not a valid URL, it is ignored
+- `OPENROUTER_API_KEY` and `DEEPSEEK_API_KEY` also need `LM_STUDIO_URL`. `OPENROUTER_API_KEY` applies only when `LM_STUDIO_URL` is `https://openrouter.ai/api`, and `DEEPSEEK_API_KEY` only when it is `https://api.deepseek.com`. `LLM_API_KEY` wins over both
+- `LM_STUDIO_MODEL` (or `lmStudioModel` in the config file) pins one model id instead of the first entry in the server's model list. The pin applies only to the configured endpoint. A fallback found by `Invoke Repair` uses its own first model, and a saved repair removes the pin from the config file
+- Privacy: a full briefing (process groups, agents, workspace paths, repository names, branches and ports) goes only to a local endpoint: `localhost`, a `.local` name, or a loopback, private or link-local IP address. Every other endpoint is hosted and receives CPU and memory totals only. A bare host name such as `http://gpu-box:1234` also counts as hosted, so use its `.local` name or IP address to get full briefings on your network
 
 For cross-machine setups, enable network serving on the model host and make sure the chosen port is reachable through the host firewall.
 
@@ -120,6 +140,7 @@ Config file: `~/.config/helm/config.json`
 | Option            | Default                 | Description                                         |
 | ----------------- | ----------------------- | --------------------------------------------------- |
 | `lmStudioUrl`     | unset (no model)        | OpenAI-compatible server URL for AI briefings       |
+| `lmStudioModel`   | unset (first listed)    | Model id to pin for the configured endpoint. `LM_STUDIO_MODEL` overrides it |
 | `apiKey`          | unset                   | Optional API key for hosted endpoints, sent as `Authorization: Bearer <key>` to the configured URL only. `LLM_API_KEY` overrides it when `LM_STUDIO_URL` is also set. The key stays in the main process and is never sent to the UI |
 | `gitRepoPaths`    | `[]`                    | Paths to monitor for git status                     |
 | `monitorInterval` | `2000`                  | Monitor polling interval in milliseconds            |

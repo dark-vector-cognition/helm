@@ -1,5 +1,6 @@
 import type { SystemState, BriefingResult } from '../../shared/types'
 import { scoreSystem } from '../health'
+import { isLocalEndpoint } from '../endpoint-url'
 import {
   buildAuthHeaders,
   healLmStudioConnection,
@@ -7,12 +8,14 @@ import {
   NO_MODEL_MESSAGE
 } from './lmstudio'
 
-export function buildBriefingPrompt(state: SystemState): string {
+export function buildBriefingPrompt(state: SystemState, resourcesOnly = false): string {
   const sections: string[] = []
 
   sections.push(
     `## System Resources\n- CPU: ${state.cpu.usage.toFixed(1)}% across ${state.cpu.cores} cores\n- Memory: ${state.memory.usagePercent.toFixed(1)}% used (${(state.memory.used / 1e9).toFixed(1)}GB / ${(state.memory.total / 1e9).toFixed(1)}GB)`
   )
+
+  if (resourcesOnly) return sections.join('\n\n')
 
   if (state.processes.length > 0) {
     const procLines = state.processes.map((g) => {
@@ -124,8 +127,23 @@ export function buildNoModelBriefing(timestamp = Date.now()): BriefingResult {
   }
 }
 
+/** fetch with redirect: 'error' throws "fetch failed" with an "unexpected redirect" cause. */
+function isBlockedRedirect(err: unknown): boolean {
+  const cause = err instanceof Error ? err.cause : undefined
+  return cause instanceof Error && /redirect/i.test(cause.message)
+}
+
+function buildRedirectBriefing(url: string): BriefingResult {
+  const message = `The endpoint at ${url} tried to redirect the briefing request. HELM does not follow redirects.`
+  return {
+    summary: message,
+    alerts: [{ severity: 'warning', message, source: 'briefing' }],
+    suggestions: ['Set LM_STUDIO_URL to the final address of the model server, without a redirect'],
+    timestamp: Date.now()
+  }
+}
+
 export async function generateBriefing(state: SystemState): Promise<BriefingResult> {
-  const prompt = buildBriefingPrompt(state)
   const connection = await healLmStudioConnection({ persist: true })
 
   if (!connection.success || !connection.url) {
@@ -146,6 +164,8 @@ export async function generateBriefing(state: SystemState): Promise<BriefingResu
   }
 
   try {
+    // Any endpoint off this machine and the local network gets resource totals only.
+    const prompt = buildBriefingPrompt(state, !isLocalEndpoint(connection.url))
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 120000)
 
@@ -161,6 +181,8 @@ export async function generateBriefing(state: SystemState): Promise<BriefingResu
         max_tokens: 512,
         temperature: 0.3
       }),
+      // The prompt detail matches the endpoint classified above, so a redirect must not move it elsewhere.
+      redirect: 'error',
       signal: controller.signal
     })
 
@@ -172,8 +194,11 @@ export async function generateBriefing(state: SystemState): Promise<BriefingResu
     }
 
     const data = await response.json()
-    const text = data.choices?.[0]?.message?.content || 'No response generated.'
+    const text = data.choices?.[0]?.message?.content
+    if (typeof text !== 'string' || !text.trim()) throw new Error('The model returned no briefing text. Retry the request.')
     const result = parseBriefingResponse(text)
+    // Report only the model the provider names. connection.model can be the 'local-model' placeholder.
+    if (typeof data.model === 'string' && data.model.trim()) result.model = data.model
 
     if (connection.repaired && connection.previousUrl) {
       result.alerts = [
@@ -193,6 +218,7 @@ export async function generateBriefing(state: SystemState): Promise<BriefingResu
     return result
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'
+    if (isBlockedRedirect(err)) return buildRedirectBriefing(connection.url)
     const isOffline = isLmStudioConnectivityError(message)
 
     return {

@@ -1,7 +1,7 @@
 import { networkInterfaces } from 'os'
 import { exec } from 'child_process'
 import { promisify } from 'util'
-import type { LmStudioHealResult, LmStudioProbeAttempt } from '../../shared/types'
+import type { HelmConfig, LmStudioHealResult, LmStudioProbeAttempt } from '../../shared/types'
 import { loadConfig, saveConfig } from '../config'
 import { envKeyWithEndpoint, normalizeEndpointUrl } from '../endpoint-url'
 
@@ -52,10 +52,20 @@ export function buildAuthHeaders(
   const fromConfig = typeof config.apiKey === 'string' ? config.apiKey.trim() : ''
   if (!fromConfig) return {}
 
-  const configured = [config.lmStudioUrl, process.env.LM_STUDIO_URL]
+  return isConfiguredEndpoint(target, config) ? { Authorization: `Bearer ${fromConfig}` } : {}
+}
+
+/** True when the normalized `url` is the configured endpoint: the saved URL or LM_STUDIO_URL. */
+function isConfiguredEndpoint(url: string, config: { lmStudioUrl?: string }): boolean {
+  return [config.lmStudioUrl, process.env.LM_STUDIO_URL]
     .map((value) => normalizeLmStudioUrl(value || ''))
-    .filter((value): value is string => Boolean(value))
-  return configured.includes(target) ? { Authorization: `Bearer ${fromConfig}` } : {}
+    .some((value) => value !== null && value === url)
+}
+
+/** Save a repaired URL. A pinned model belongs to the old URL, so it is not carried to the new one. */
+function saveRepairedUrl(config: HelmConfig, url: string): void {
+  const { lmStudioModel: _pinned, ...rest } = config
+  saveConfig({ ...rest, lmStudioUrl: url })
 }
 
 function hasConfiguredEndpoint(configuredUrl: string | undefined): boolean {
@@ -240,10 +250,14 @@ export async function probeLmStudioEndpoint(
     }
 
     const payload = await response.json().catch(() => ({}))
-    const model =
+    // The pinned model belongs to the configured endpoint. A discovered fallback uses its own catalog.
+    const config = loadConfig()
+    const selected = isConfiguredEndpoint(normalized, config) ? config.lmStudioModel?.trim() : undefined
+    const model = selected || (
       Array.isArray(payload?.data) && typeof payload.data[0]?.id === 'string'
         ? payload.data[0].id
         : 'local-model'
+    )
 
     return { url: normalized, ok: true, model }
   } catch (err) {
@@ -305,7 +319,7 @@ export async function healLmStudioConnection(options?: {
 
     const repaired = Boolean(previousLabel && previousUrl !== probe.url)
     if (options?.persist && repaired) {
-      saveConfig({ ...config, lmStudioUrl: probe.url })
+      saveRepairedUrl(config, probe.url)
     }
 
     return {
@@ -329,7 +343,7 @@ export async function healLmStudioConnection(options?: {
     if (subnetScan.success) {
       const repaired = Boolean(previousLabel && previousUrl !== subnetScan.success.url)
       if (options?.persist && repaired) {
-        saveConfig({ ...config, lmStudioUrl: subnetScan.success.url })
+        saveRepairedUrl(config, subnetScan.success.url)
       }
 
       return {

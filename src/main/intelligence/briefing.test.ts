@@ -1,6 +1,9 @@
+import { createServer, type Server } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
 import { buildBriefingPrompt, buildNoModelBriefing, generateBriefing, parseBriefingResponse } from './briefing'
 import type { LmStudioHealResult, SystemState } from '../../shared/types'
+import { isLocalEndpoint } from '../endpoint-url'
 import { healLmStudioConnection } from './lmstudio'
 
 const { loadConfigMock } = vi.hoisted(() => ({ loadConfigMock: vi.fn() }))
@@ -69,6 +72,15 @@ const mockState: SystemState = {
 }
 
 describe('buildBriefingPrompt', () => {
+  it('sends only resource totals in hosted briefing mode', () => {
+    const prompt = buildBriefingPrompt(mockState, true)
+    expect(prompt).toContain('35.5%')
+    expect(prompt).toContain('56.3%')
+    for (const privateDetail of ['my-app', 'postgres', 'claude-code', '/home/user', 'feature/auth', '3000']) {
+      expect(prompt).not.toContain(privateDetail)
+    }
+  })
+
   it('should include process groups in the prompt', () => {
     const prompt = buildBriefingPrompt(mockState)
     expect(prompt).toContain('my-app')
@@ -230,6 +242,63 @@ describe('generateBriefing API key header', () => {
     else process.env.LM_STUDIO_URL = savedEnvUrl
   })
 
+  it('uses a pinned hosted model and keeps identities out of its payload', async () => {
+    loadConfigMock.mockReturnValue({ lmStudioUrl: 'https://openrouter.ai/api' })
+    vi.mocked(healLmStudioConnection).mockResolvedValue({ ...connected, url: 'https://openrouter.ai/api', model: 'deepseek/chosen-fixture' })
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ model: 'deepseek/chosen-fixture', choices: [{ message: { content: '{"summary":"Live fixture response","alerts":[],"suggestions":[]}' } }] }) })
+    const result = await generateBriefing(mockState)
+    const sent = JSON.parse(fetchMock.mock.calls[0][1].body)
+    expect(sent.model).toBe('deepseek/chosen-fixture')
+    expect(result.model).toBe('deepseek/chosen-fixture')
+    expect(sent.messages[1].content).toContain('35.5%')
+    expect(sent.messages[1].content).not.toContain('my-app')
+    expect(sent.messages[1].content).not.toContain('/home/user')
+  })
+
+  it('sends only resource totals to any other hosted endpoint', async () => {
+    for (const url of ['https://api.openai.com', 'https://api.together.xyz', 'https://llm.example.net/openai']) {
+      fetchMock.mockClear()
+      loadConfigMock.mockReturnValue({ lmStudioUrl: url })
+      vi.mocked(healLmStudioConnection).mockResolvedValue({ ...connected, url })
+      await generateBriefing(mockState)
+      const content = JSON.parse(fetchMock.mock.calls[0][1].body).messages[1].content as string
+      expect(content, url).toContain('35.5%')
+      for (const identity of ['my-app', 'postgres', '/home/user', 'feature/auth', 'project', ':3000']) {
+        expect(content, `${url} ${identity}`).not.toContain(identity)
+      }
+    }
+  })
+
+  it('keeps the full workspace briefing for a local network endpoint', async () => {
+    for (const url of ['http://localhost:1234', 'http://192.168.1.20:1234', 'http://studio.local:1234']) {
+      fetchMock.mockClear()
+      loadConfigMock.mockReturnValue({ lmStudioUrl: url })
+      vi.mocked(healLmStudioConnection).mockResolvedValue({ ...connected, url })
+      await generateBriefing(mockState)
+      const content = JSON.parse(fetchMock.mock.calls[0][1].body).messages[1].content as string
+      expect(content, url).toContain('my-app')
+      expect(content, url).toContain('feature/auth')
+    }
+  })
+
+  it('does not claim a successful briefing for an empty provider response', async () => {
+    loadConfigMock.mockReturnValue({ lmStudioUrl: 'https://api.example.com' })
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ choices: [{ message: { content: '' } }] }) })
+    const result = await generateBriefing(mockState)
+    expect(result.summary).toContain('returned no briefing text')
+    expect(result.model).toBeUndefined()
+  })
+
+  it('reports only the model the response names, never the placeholder', async () => {
+    loadConfigMock.mockReturnValue({ lmStudioUrl: 'http://127.0.0.1:1234' })
+    vi.mocked(healLmStudioConnection).mockResolvedValue({ ...connected, url: 'http://127.0.0.1:1234', model: 'local-model' })
+    const result = await generateBriefing(mockState)
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).model).toBe('local-model')
+    expect(result.summary).toBe('ok')
+    expect(result.raw).toBeTruthy()
+    expect(result.model).toBeUndefined()
+  })
+
   it('sends the configured key as a bearer token', async () => {
     loadConfigMock.mockReturnValue({ lmStudioUrl: 'https://api.example.com/v1', apiKey: 'cfg-key' })
 
@@ -277,5 +346,68 @@ describe('generateBriefing API key header', () => {
 
     expect(String((fetchMock.mock.calls[0][1] as { body: string }).body)).not.toContain('cfg-key')
     expect(JSON.stringify(result)).not.toContain('cfg-key')
+  })
+})
+
+describe('generateBriefing redirects', () => {
+  const servers: Server[] = []
+
+  const listen = async (host: string, handler: Parameters<typeof createServer>[1]): Promise<number> => {
+    const server = createServer(handler)
+    servers.push(server)
+    await new Promise<void>((resolve) => server.listen(0, host, resolve))
+    return (server.address() as AddressInfo).port
+  }
+
+  afterEach(async () => {
+    await Promise.all(servers.splice(0).map((s) => new Promise((resolve) => s.close(resolve))))
+  })
+
+  it('does not follow a local endpoint redirect to a hosted endpoint', async () => {
+    // The real fetch runs. The hosted target is an IPv4-mapped address: HELM classifies it as
+    // hosted, but the connection stays on this machine, so the test needs no network.
+    const hostedBodies: string[] = []
+    const hostedPort = await listen('::', (req, res) => {
+      let body = ''
+      req.on('data', (chunk) => (body += chunk))
+      req.on('end', () => {
+        hostedBodies.push(body)
+        res.setHeader('Content-Type', 'application/json')
+        res.end(JSON.stringify({ choices: [{ message: { content: '{"summary":"leaked","alerts":[],"suggestions":[]}' } }] }))
+      })
+    })
+    const hostedUrl = `http://[::ffff:127.0.0.1]:${hostedPort}/v1/chat/completions`
+    expect(isLocalEndpoint(hostedUrl)).toBe(false)
+
+    let localRequests = 0
+    const localPort = await listen('127.0.0.1', (req, res) => {
+      localRequests++
+      req.resume()
+      res.writeHead(307, { Location: hostedUrl })
+      res.end()
+    })
+    const localUrl = `http://127.0.0.1:${localPort}`
+    expect(isLocalEndpoint(localUrl)).toBe(true)
+
+    loadConfigMock.mockReturnValue({ lmStudioUrl: localUrl })
+    vi.mocked(healLmStudioConnection).mockResolvedValue({
+      success: true,
+      repaired: false,
+      configured: true,
+      message: 'reachable',
+      url: localUrl,
+      model: 'local-model',
+      attempts: []
+    })
+
+    const result = await generateBriefing(mockState)
+
+    expect(localRequests).toBe(1)
+    expect(hostedBodies).toEqual([])
+    expect(result.summary).not.toBe('leaked')
+    expect(result.alerts[0]?.severity).toBe('warning')
+    // A blocked redirect is reported as a redirect, not as an offline server.
+    expect(result.summary).toContain(`The endpoint at ${localUrl} tried to redirect`)
+    expect(result.summary).not.toContain('offline')
   })
 })
