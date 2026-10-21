@@ -27,6 +27,39 @@ export function normalizeEndpointUrl(raw: unknown): string | null {
 }
 
 /**
+ * True only when the endpoint is on this machine or the local network: localhost, a `.local`
+ * name, a loopback, private or link-local IPv4 address, or a loopback, unique-local or link-local
+ * IPv6 address. Every other host, a bare single-label name and an unparseable value count as
+ * hosted, so briefings to them carry resource totals only.
+ */
+export function isLocalEndpoint(raw: unknown): boolean {
+  const normalized = normalizeEndpointUrl(raw)
+  if (!normalized) return false
+  const host = new URL(normalized).hostname.toLowerCase()
+
+  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local')) return true
+
+  const ipv4 = host.match(/^(\d{1,3})\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/)
+  if (ipv4) {
+    const [a, b] = [Number(ipv4[1]), Number(ipv4[2])]
+    return (
+      a === 127 ||
+      a === 10 ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 169 && b === 254)
+    )
+  }
+
+  if (host.startsWith('[') && host.endsWith(']')) {
+    const ipv6 = host.slice(1, -1)
+    return ipv6 === '::1' || /^f[cd][0-9a-f]{2}:/.test(ipv6) || /^fe[89ab][0-9a-f]:/.test(ipv6)
+  }
+
+  return false
+}
+
+/**
  * The API key from LLM_API_KEY paired with the endpoint from LM_STUDIO_URL, or undefined.
  *
  * The key counts only when LM_STUDIO_URL is set and parses as a URL, because that pair is the user

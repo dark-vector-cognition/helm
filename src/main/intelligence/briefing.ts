@@ -1,5 +1,6 @@
 import type { SystemState, BriefingResult } from '../../shared/types'
 import { scoreSystem } from '../health'
+import { isLocalEndpoint } from '../endpoint-url'
 import {
   buildAuthHeaders,
   healLmStudioConnection,
@@ -147,8 +148,8 @@ export async function generateBriefing(state: SystemState): Promise<BriefingResu
   }
 
   try {
-    const hosted = ['openrouter.ai', 'api.deepseek.com'].includes(new URL(connection.url).hostname)
-    const prompt = buildBriefingPrompt(state, hosted)
+    // Any endpoint off this machine and the local network gets resource totals only.
+    const prompt = buildBriefingPrompt(state, !isLocalEndpoint(connection.url))
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 120000)
 

@@ -252,6 +252,32 @@ describe('generateBriefing API key header', () => {
     expect(sent.messages[1].content).not.toContain('/home/user')
   })
 
+  it('sends only resource totals to any other hosted endpoint', async () => {
+    for (const url of ['https://api.openai.com', 'https://api.together.xyz', 'https://llm.example.net/openai']) {
+      fetchMock.mockClear()
+      loadConfigMock.mockReturnValue({ lmStudioUrl: url })
+      vi.mocked(healLmStudioConnection).mockResolvedValue({ ...connected, url })
+      await generateBriefing(mockState)
+      const content = JSON.parse(fetchMock.mock.calls[0][1].body).messages[1].content as string
+      expect(content, url).toContain('35.5%')
+      for (const identity of ['my-app', 'postgres', '/home/user', 'feature/auth', 'project', ':3000']) {
+        expect(content, `${url} ${identity}`).not.toContain(identity)
+      }
+    }
+  })
+
+  it('keeps the full workspace briefing for a local network endpoint', async () => {
+    for (const url of ['http://localhost:1234', 'http://192.168.1.20:1234', 'http://studio.local:1234']) {
+      fetchMock.mockClear()
+      loadConfigMock.mockReturnValue({ lmStudioUrl: url })
+      vi.mocked(healLmStudioConnection).mockResolvedValue({ ...connected, url })
+      await generateBriefing(mockState)
+      const content = JSON.parse(fetchMock.mock.calls[0][1].body).messages[1].content as string
+      expect(content, url).toContain('my-app')
+      expect(content, url).toContain('feature/auth')
+    }
+  })
+
   it('does not claim a successful briefing for an empty provider response', async () => {
     loadConfigMock.mockReturnValue({ lmStudioUrl: 'https://api.example.com' })
     fetchMock.mockResolvedValue({ ok: true, json: async () => ({ choices: [{ message: { content: '' } }] }) })
