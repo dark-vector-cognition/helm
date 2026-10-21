@@ -165,6 +165,8 @@ export async function generateBriefing(state: SystemState): Promise<BriefingResu
         max_tokens: 512,
         temperature: 0.3
       }),
+      // The prompt detail matches the endpoint classified above, so a redirect must not move it elsewhere.
+      redirect: 'error',
       signal: controller.signal
     })
 

@@ -1,6 +1,9 @@
+import { createServer, type Server } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
 import { buildBriefingPrompt, buildNoModelBriefing, generateBriefing, parseBriefingResponse } from './briefing'
 import type { LmStudioHealResult, SystemState } from '../../shared/types'
+import { isLocalEndpoint } from '../endpoint-url'
 import { healLmStudioConnection } from './lmstudio'
 
 const { loadConfigMock } = vi.hoisted(() => ({ loadConfigMock: vi.fn() }))
@@ -333,5 +336,65 @@ describe('generateBriefing API key header', () => {
 
     expect(String((fetchMock.mock.calls[0][1] as { body: string }).body)).not.toContain('cfg-key')
     expect(JSON.stringify(result)).not.toContain('cfg-key')
+  })
+})
+
+describe('generateBriefing redirects', () => {
+  const servers: Server[] = []
+
+  const listen = async (host: string, handler: Parameters<typeof createServer>[1]): Promise<number> => {
+    const server = createServer(handler)
+    servers.push(server)
+    await new Promise<void>((resolve) => server.listen(0, host, resolve))
+    return (server.address() as AddressInfo).port
+  }
+
+  afterEach(async () => {
+    await Promise.all(servers.splice(0).map((s) => new Promise((resolve) => s.close(resolve))))
+  })
+
+  it('does not follow a local endpoint redirect to a hosted endpoint', async () => {
+    // The real fetch runs. The hosted target is an IPv4-mapped address: HELM classifies it as
+    // hosted, but the connection stays on this machine, so the test needs no network.
+    const hostedBodies: string[] = []
+    const hostedPort = await listen('::', (req, res) => {
+      let body = ''
+      req.on('data', (chunk) => (body += chunk))
+      req.on('end', () => {
+        hostedBodies.push(body)
+        res.setHeader('Content-Type', 'application/json')
+        res.end(JSON.stringify({ choices: [{ message: { content: '{"summary":"leaked","alerts":[],"suggestions":[]}' } }] }))
+      })
+    })
+    const hostedUrl = `http://[::ffff:127.0.0.1]:${hostedPort}/v1/chat/completions`
+    expect(isLocalEndpoint(hostedUrl)).toBe(false)
+
+    let localRequests = 0
+    const localPort = await listen('127.0.0.1', (req, res) => {
+      localRequests++
+      req.resume()
+      res.writeHead(307, { Location: hostedUrl })
+      res.end()
+    })
+    const localUrl = `http://127.0.0.1:${localPort}`
+    expect(isLocalEndpoint(localUrl)).toBe(true)
+
+    loadConfigMock.mockReturnValue({ lmStudioUrl: localUrl })
+    vi.mocked(healLmStudioConnection).mockResolvedValue({
+      success: true,
+      repaired: false,
+      configured: true,
+      message: 'reachable',
+      url: localUrl,
+      model: 'local-model',
+      attempts: []
+    })
+
+    const result = await generateBriefing(mockState)
+
+    expect(localRequests).toBe(1)
+    expect(hostedBodies).toEqual([])
+    expect(result.summary).not.toBe('leaked')
+    expect(result.alerts[0]?.severity).toBe('warning')
   })
 })
