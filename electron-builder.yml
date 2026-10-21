@@ -36,18 +36,21 @@ mac:
   target: dmg
   icon: build/icon.icns
   category: public.app-category.developer-tools
-  # Developer ID signing. A missing identity fails the build instead of shipping unsigned.
+  # Developer ID signing. forceCodeSigning fails the build when the identity is missing,
+  # so a Mac build never ships unsigned.
   identity: Dark Vector Cognition LLC (WA6GHCR9GV)
+  forceCodeSigning: true
   hardenedRuntime: true
   gatekeeperAssess: false
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
-    - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
-    - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
-    - NSAppleEventsUsageDescription: HELM opens Terminal to attach to agent sessions.
-  # Notarization runs only when APPLE_KEYCHAIN_PROFILE is set (notarytool keychain profile).
-  # scripts/build-mac-release.sh sets it, defaulting to helm-notary. No credentials live here.
+    NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
+    NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
+    NSAppleEventsUsageDescription: HELM opens Terminal to attach to agent sessions.
+  # electron-builder skips notarization with only a warning when APPLE_KEYCHAIN_PROFILE is unset.
+  # scripts/build-mac-release.sh sets it (default helm-notary) and then checks the result with
+  # spctl and stapler. No credentials live here.
   notarize: true
 dmg:
   artifactName: ${name}-${version}-${arch}.${ext}

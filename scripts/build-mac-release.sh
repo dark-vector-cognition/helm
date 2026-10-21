@@ -58,9 +58,21 @@ fi
 # 4. Verify
 codesign --verify --deep --strict --verbose=2 "$APP"
 codesign -dvv "$APP" 2>&1 | grep -E '^(Authority|TeamIdentifier|Identifier|Runtime Version|Timestamp)'
+/usr/libexec/PlistBuddy -c 'Print :NSAppleEventsUsageDescription' "$APP/Contents/Info.plist"
 if [[ "$NOTARIZE" == 1 ]]; then
-  spctl -a -vv "$APP"
-  spctl -a -vv -t open --context context:primary-signature "$DMG"
+  xcrun stapler validate "$APP"
+  xcrun stapler validate "$DMG"
+  # Print spctl output even on rejection, then require acceptance from a notarized source.
+  APP_SPCTL=$(spctl -a -vv "$APP" 2>&1 || true)
+  echo "$APP_SPCTL"
+  DMG_SPCTL=$(spctl -a -vv -t open --context context:primary-signature "$DMG" 2>&1 || true)
+  echo "$DMG_SPCTL"
+  for result in "$APP_SPCTL" "$DMG_SPCTL"; do
+    if [[ "$result" != *"source=Notarized Developer ID"* ]]; then
+      echo "Error: Gatekeeper did not report a notarized Developer ID source."
+      exit 1
+    fi
+  done
 else
   echo "Notarization skipped: Gatekeeper will reject this build on other Macs."
 fi

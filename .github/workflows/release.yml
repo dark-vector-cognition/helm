@@ -1,9 +1,16 @@
 name: Release
 
+# A tag push does not publish anything. This workflow runs only by hand, and it uploads a DMG
+# only after the DMG passes Developer ID, notarization and stapler checks. CI has no signing
+# identity or notary profile yet, so today the build step fails (forceCodeSigning) and nothing
+# is published. Until CI signing exists, build the release on a Mac with
+# scripts/build-mac-release.sh and attach the verified DMG to the release by hand.
 on:
-  push:
-    tags:
-      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag, for example v6.0.0'
+        required: true
 
 permissions:
   contents: write
@@ -14,6 +21,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
 
       - name: Setup Node 22
         uses: actions/setup-node@v4
@@ -25,18 +34,31 @@ jobs:
         run: npm ci
 
       - name: Build & package
-        run: npm run build:mac
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run build && npx electron-builder --mac dmg --arm64 --publish never
 
-      - name: Upload artifacts to GitHub Release
+      - name: Verify signing and notarization
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          dmgs=(dist/*.dmg)
+          if [[ ${#dmgs[@]} -eq 0 ]]; then
+            echo "No DMG was built."
+            exit 1
+          fi
+          for dmg in "${dmgs[@]}"; do
+            codesign --verify --strict --verbose=2 "$dmg"
+            xcrun stapler validate "$dmg"
+            spctl -a -vv -t open --context context:primary-signature "$dmg" 2>&1 | tee spctl.log
+            grep -q 'source=Notarized Developer ID' spctl.log
+          done
+
+      - name: Upload artifacts to a draft GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: ${{ github.ref_name }}
-          body_path: docs/releases/${{ github.ref_name }}.md
-          files: |
-            dist/*.dmg
-            dist/*.zip
-          make_latest: true
+          tag_name: ${{ inputs.tag }}
+          name: ${{ inputs.tag }}
+          body_path: docs/releases/${{ inputs.tag }}.md
+          files: dist/*.dmg
+          draft: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
