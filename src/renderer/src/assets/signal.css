@@ -50,8 +50,17 @@
 .signal-layout {
   display: flex;
 }
+/* Other skins keep the spacing between their nav and main cards. */
+.helm-shell:not([data-skin='signal']) .signal-body {
+  padding: 8px 16px 16px;
+}
+.helm-shell:not([data-skin='signal']) .signal-layout {
+  gap: 16px;
+}
 .shell-nav {
   display: flex;
+}
+[data-skin='signal'] .shell-nav {
   border-radius: 0;
   border-width: 0 1px 0 0;
   padding: 26px 12px 14px;
@@ -59,7 +68,7 @@
 .shell-compact-nav {
   display: none;
 }
-.shell-main {
+[data-skin='signal'] .shell-main {
   border: 0;
   border-radius: 0;
 }
@@ -124,9 +133,11 @@
   justify-content: space-between;
   gap: 25px;
   padding: 4px 0 26px;
+}
+[data-skin='signal'] .shell-page-header {
   background: none;
 }
-.shell-page-kicker {
+[data-skin='signal'] .shell-page-kicker {
   font-family: var(--helm-font-mono);
   font-size: 9px;
   letter-spacing: 0.13em;
@@ -481,7 +492,7 @@
   .shell-compact-nav > div {
     gap: 6px;
   }
-  .shell-mobile-nav-button {
+  [data-skin='signal'] .shell-mobile-nav-button {
     border-radius: 4px;
     box-shadow: none;
     transform: none;
