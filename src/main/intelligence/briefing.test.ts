@@ -289,6 +289,16 @@ describe('generateBriefing API key header', () => {
     expect(result.model).toBeUndefined()
   })
 
+  it('reports only the model the response names, never the placeholder', async () => {
+    loadConfigMock.mockReturnValue({ lmStudioUrl: 'http://127.0.0.1:1234' })
+    vi.mocked(healLmStudioConnection).mockResolvedValue({ ...connected, url: 'http://127.0.0.1:1234', model: 'local-model' })
+    const result = await generateBriefing(mockState)
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).model).toBe('local-model')
+    expect(result.summary).toBe('ok')
+    expect(result.raw).toBeTruthy()
+    expect(result.model).toBeUndefined()
+  })
+
   it('sends the configured key as a bearer token', async () => {
     loadConfigMock.mockReturnValue({ lmStudioUrl: 'https://api.example.com/v1', apiKey: 'cfg-key' })
 
@@ -396,5 +406,8 @@ describe('generateBriefing redirects', () => {
     expect(hostedBodies).toEqual([])
     expect(result.summary).not.toBe('leaked')
     expect(result.alerts[0]?.severity).toBe('warning')
+    // A blocked redirect is reported as a redirect, not as an offline server.
+    expect(result.summary).toContain(`The endpoint at ${localUrl} tried to redirect`)
+    expect(result.summary).not.toContain('offline')
   })
 })

@@ -127,6 +127,22 @@ export function buildNoModelBriefing(timestamp = Date.now()): BriefingResult {
   }
 }
 
+/** fetch with redirect: 'error' throws "fetch failed" with an "unexpected redirect" cause. */
+function isBlockedRedirect(err: unknown): boolean {
+  const cause = err instanceof Error ? err.cause : undefined
+  return cause instanceof Error && /redirect/i.test(cause.message)
+}
+
+function buildRedirectBriefing(url: string): BriefingResult {
+  const message = `The endpoint at ${url} tried to redirect the briefing request. HELM does not follow redirects.`
+  return {
+    summary: message,
+    alerts: [{ severity: 'warning', message, source: 'briefing' }],
+    suggestions: ['Set LM_STUDIO_URL to the final address of the model server, without a redirect'],
+    timestamp: Date.now()
+  }
+}
+
 export async function generateBriefing(state: SystemState): Promise<BriefingResult> {
   const connection = await healLmStudioConnection({ persist: true })
 
@@ -181,7 +197,8 @@ export async function generateBriefing(state: SystemState): Promise<BriefingResu
     const text = data.choices?.[0]?.message?.content
     if (typeof text !== 'string' || !text.trim()) throw new Error('The model returned no briefing text. Retry the request.')
     const result = parseBriefingResponse(text)
-    result.model = typeof data.model === 'string' ? data.model : connection.model
+    // Report only the model the provider names. connection.model can be the 'local-model' placeholder.
+    if (typeof data.model === 'string' && data.model.trim()) result.model = data.model
 
     if (connection.repaired && connection.previousUrl) {
       result.alerts = [
@@ -201,6 +218,7 @@ export async function generateBriefing(state: SystemState): Promise<BriefingResu
     return result
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'
+    if (isBlockedRedirect(err)) return buildRedirectBriefing(connection.url)
     const isOffline = isLmStudioConnectivityError(message)
 
     return {

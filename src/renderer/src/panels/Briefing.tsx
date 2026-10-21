@@ -107,7 +107,8 @@ export function BriefingPanel({ variant = 'compact' }: BriefingPanelProps): JSX.
       const result = await window.helm.requestBriefing()
       if (result) {
         setBriefing(result)
-        pulseCore(result.model ? 'speaking' : 'offline')
+        // A model reply always carries raw text. Some providers do not name the model.
+        pulseCore(result.model || result.raw ? 'speaking' : 'offline')
       } else {
         setError('No system state available yet')
       }
