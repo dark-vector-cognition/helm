@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/dark-vector-cognition/helm/docs/orbs/schema/gate.schema.json",
+  "title": "Helm Gate manifest v0.1",
+  "type": "object",
+  "required": ["specVersion", "name", "version", "decision", "inputs", "enforces", "onFail"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "specVersion": { "const": "0.1" },
+    "name": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" },
+    "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z.-]+)?$" },
+    "decision": { "enum": ["rule", "classifier", "jev", "human"] },
+    "inputs": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+    "enforces": {
+      "type": "object",
+      "required": ["schema"],
+      "properties": { "schema": { "type": "string", "minLength": 1 } }
+    },
+    "onFail": { "enum": ["retry", "escalate", "reject"] },
+    "maxRetries": { "type": "integer", "minimum": 1 },
+    "record": { "type": "boolean", "default": true }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "onFail": { "const": "retry" } } },
+      "then": { "required": ["maxRetries"] }
+    },
+    {
+      "if": { "properties": { "decision": { "const": "human" } } },
+      "then": { "properties": { "onFail": { "enum": ["escalate", "reject"] } } }
+    }
+  ]
+}
