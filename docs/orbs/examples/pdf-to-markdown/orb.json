@@ -1,0 +1,13 @@
+{
+  "$schema": "../../schema/orb.schema.json",
+  "specVersion": "0.1",
+  "name": "pdf-to-markdown",
+  "version": "1.0.0",
+  "kind": "skill",
+  "description": "Convert a PDF into clean Markdown with headings, tables and figure captions kept.",
+  "skill": { "path": "SKILL.md" },
+  "requests": { "mcps": ["filesystem"], "secrets": [] },
+  "access": { "approval": "first-use", "localOnly": true },
+  "healthcheck": { "evalSet": "evals/cases.jsonl", "passThreshold": 0.8, "minCases": 20 },
+  "ui": { "globe": true, "icon": "file" }
+}
