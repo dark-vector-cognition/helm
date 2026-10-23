@@ -5,31 +5,62 @@
   "type": "object",
   "required": ["specVersion", "name", "version", "kind", "description", "access"],
   "properties": {
-    "$schema": { "type": "string" },
-    "specVersion": { "const": "0.1" },
-    "name": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" },
-    "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z.-]+)?$" },
-    "kind": { "enum": ["model", "skill", "graph"] },
-    "description": { "type": "string", "minLength": 1 },
+    "$schema": {
+      "type": "string"
+    },
+    "specVersion": {
+      "const": "0.1"
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$"
+    },
+    "kind": {
+      "enum": ["model", "skill", "graph"]
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
     "skill": {
       "type": "object",
       "required": ["path"],
-      "properties": { "path": { "type": "string", "minLength": 1 } }
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?![/~\\\\])(?![A-Za-z]:)(?!(?:.*[/\\\\])?\\.\\.(?:[/\\\\]|$)).+$"
+        }
+      }
     },
     "model": {
       "type": "object",
       "required": ["provider", "runtime", "dataBoundary"],
       "properties": {
-        "provider": { "type": "string", "minLength": 1 },
-        "runtime": { "enum": ["cli", "api", "local"] },
-        "dataBoundary": { "enum": ["local", "vendor"] }
+        "provider": {
+          "type": "string",
+          "minLength": 1
+        },
+        "runtime": {
+          "enum": ["cli", "api", "local"]
+        },
+        "dataBoundary": {
+          "enum": ["local", "vendor"]
+        }
       }
     },
     "graph": {
       "type": "object",
       "required": ["entry", "nodes", "edges", "gates"],
       "properties": {
-        "entry": { "type": "string" },
+        "entry": {
+          "type": "string",
+          "minLength": 1
+        },
         "nodes": {
           "type": "array",
           "minItems": 1,
@@ -37,19 +68,47 @@
             "type": "object",
             "required": ["id", "mode"],
             "properties": {
-              "id": { "type": "string", "minLength": 1 },
-              "uses": { "type": "string", "minLength": 1 },
-              "mode": { "enum": ["code", "classifier", "llm"] },
-              "outputSchema": { "type": "string", "minLength": 1 }
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "uses": {
+                "type": "string",
+                "minLength": 1
+              },
+              "mode": {
+                "enum": ["code", "classifier", "llm"]
+              },
+              "outputSchema": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^(?![/~\\\\])(?![A-Za-z]:)(?!(?:.*[/\\\\])?\\.\\.(?:[/\\\\]|$)).+$"
+              }
             },
             "allOf": [
               {
-                "if": { "properties": { "mode": { "const": "llm" } } },
-                "then": { "required": ["outputSchema", "uses"] }
+                "if": {
+                  "properties": {
+                    "mode": {
+                      "const": "llm"
+                    }
+                  }
+                },
+                "then": {
+                  "required": ["outputSchema", "uses"]
+                }
               },
               {
-                "if": { "properties": { "mode": { "const": "classifier" } } },
-                "then": { "required": ["uses"] }
+                "if": {
+                  "properties": {
+                    "mode": {
+                      "const": "classifier"
+                    }
+                  }
+                },
+                "then": {
+                  "required": ["uses"]
+                }
               }
             ]
           }
@@ -60,9 +119,18 @@
             "type": "object",
             "required": ["from", "to", "gate"],
             "properties": {
-              "from": { "type": "string" },
-              "to": { "type": "string" },
-              "gate": { "type": "string" }
+              "from": {
+                "type": "string",
+                "minLength": 1
+              },
+              "to": {
+                "type": "string",
+                "minLength": 1
+              },
+              "gate": {
+                "type": "string",
+                "minLength": 1
+              }
             }
           }
         },
@@ -71,7 +139,17 @@
           "items": {
             "type": "object",
             "required": ["id", "path"],
-            "properties": { "id": { "type": "string" }, "path": { "type": "string" } }
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "path": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^(?![/~\\\\])(?![A-Za-z]:)(?!(?:.*[/\\\\])?\\.\\.(?:[/\\\\]|$)).+$"
+              }
+            }
           }
         }
       }
@@ -79,11 +157,20 @@
     "requests": {
       "type": "object",
       "properties": {
-        "mcps": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "mcps": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
         "secrets": {
           "description": "Secret names only. Never values.",
           "type": "array",
-          "items": { "type": "string", "minLength": 1 }
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         }
       }
     },
@@ -91,33 +178,116 @@
       "type": "object",
       "required": ["approval"],
       "properties": {
-        "approval": { "enum": ["none", "first-use", "every-run"] },
-        "localOnly": { "type": "boolean" }
+        "approval": {
+          "enum": ["none", "first-use", "every-run"]
+        },
+        "localOnly": {
+          "type": "boolean"
+        }
       }
     },
     "healthcheck": {
       "type": "object",
       "required": ["evalSet", "passThreshold", "minCases"],
       "properties": {
-        "evalSet": { "type": "string", "minLength": 1 },
-        "passThreshold": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
-        "minCases": { "type": "integer", "minimum": 1 }
+        "evalSet": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?![/~\\\\])(?![A-Za-z]:)(?!(?:.*[/\\\\])?\\.\\.(?:[/\\\\]|$)).+$"
+        },
+        "passThreshold": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        },
+        "minCases": {
+          "type": "integer",
+          "minimum": 1
+        }
       }
     },
     "ui": {
       "type": "object",
-      "properties": { "globe": { "type": "boolean" }, "icon": { "type": "string" } }
+      "properties": {
+        "globe": {
+          "type": "boolean"
+        },
+        "icon": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
     }
   },
   "allOf": [
     {
-      "if": { "properties": { "kind": { "const": "skill" } } },
-      "then": { "required": ["skill", "healthcheck"] }
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "skill"
+          }
+        },
+        "required": ["kind"]
+      },
+      "then": {
+        "required": ["skill", "healthcheck"],
+        "not": {
+          "anyOf": [
+            {
+              "required": ["model"]
+            },
+            {
+              "required": ["graph"]
+            }
+          ]
+        }
+      }
     },
     {
-      "if": { "properties": { "kind": { "const": "graph" } } },
-      "then": { "required": ["graph", "healthcheck"] }
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "graph"
+          }
+        },
+        "required": ["kind"]
+      },
+      "then": {
+        "required": ["graph", "healthcheck"],
+        "not": {
+          "anyOf": [
+            {
+              "required": ["model"]
+            },
+            {
+              "required": ["skill"]
+            }
+          ]
+        }
+      }
     },
-    { "if": { "properties": { "kind": { "const": "model" } } }, "then": { "required": ["model"] } }
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "model"
+          }
+        },
+        "required": ["kind"]
+      },
+      "then": {
+        "required": ["model"],
+        "not": {
+          "anyOf": [
+            {
+              "required": ["skill"]
+            },
+            {
+              "required": ["graph"]
+            }
+          ]
+        }
+      }
+    }
   ]
 }

@@ -9,6 +9,8 @@ import {
   MODEL_RUNTIMES,
   NODE_MODES,
   ORB_KINDS,
+  REL_PATH_RE,
+  SEMVER_RE,
   canRun,
   validateGate,
   validateOrb,
@@ -128,5 +130,77 @@ describe('JSON Schemas match the TypeScript enums', () => {
   it('gate.schema.json', () => {
     expect(gateSchema.properties.decision.enum).toEqual([...GATE_DECISIONS])
     expect(gateSchema.properties.onFail.enum).toEqual([...GATE_ON_FAIL])
+  })
+})
+
+describe('review fixes (PR #68)', () => {
+  const skill = load(EXAMPLES, 'pdf-to-markdown', 'orb.json')
+  const graph = load(EXAMPLES, 'doc-digest', 'orb.json')
+  const model = load(EXAMPLES, 'local-model', 'orb.json')
+  const gate = load(EXAMPLES, 'doc-digest', 'gates', 'markdown-shape.gate.json')
+
+  it('rejects a graph whose edges or gates are not arrays', () => {
+    const m = clone(graph) as any
+    m.graph.edges = 'invalid'
+    m.graph.gates = {}
+    expect(validateOrb(m).errors).toEqual(
+      expect.arrayContaining(['graph.edges must be an array', 'graph.gates must be an array'])
+    )
+  })
+
+  it('rejects malformed optional fields', () => {
+    expect(validateOrb({ ...clone(model), healthcheck: 'broken' }).ok).toBe(false)
+    expect(validateOrb({ ...clone(skill), ui: { globe: 'yes' } }).errors).toContain(
+      'ui.globe must be a boolean'
+    )
+    const g = clone(graph) as any
+    g.graph.nodes[0].uses = 42
+    expect(validateOrb(g).errors.join(' ')).toContain('uses must be a string')
+    const gt = { ...clone(gate), onFail: 'reject', maxRetries: 'forever' }
+    expect(validateGate(gt).errors).toContain('maxRetries must be an integer >= 1')
+  })
+
+  it('follows semver.org exactly', () => {
+    for (const ok of ['1.0.0', '1.0.0+build.1', '1.0.0-alpha.1', '0.1.0']) {
+      expect(SEMVER_RE.test(ok)).toBe(true)
+    }
+    for (const bad of ['01.0.0', '1.0.0-01', '1.0.0-a..b', 'v1.0.0', '1.0']) {
+      expect(SEMVER_RE.test(bad)).toBe(false)
+    }
+  })
+
+  it('keeps models and skills apart', () => {
+    const m = { ...clone(skill), model: clone(model).model }
+    expect(validateOrb(m).errors).toContain('skill Orbs must not declare "model"')
+  })
+
+  it('requires Orb-relative paths', () => {
+    for (const bad of [
+      '/tmp/cases.jsonl',
+      '~/cases.jsonl',
+      '../cases.jsonl',
+      'a/../../b',
+      'C:/x'
+    ]) {
+      expect(REL_PATH_RE.test(bad)).toBe(false)
+      const m = clone(skill) as any
+      m.healthcheck.evalSet = bad
+      expect(validateOrb(m).ok).toBe(false)
+    }
+    for (const ok of ['evals/cases.jsonl', 'SKILL.md', 'a/..b/c']) {
+      expect(REL_PATH_RE.test(ok)).toBe(true)
+    }
+    const g = clone(graph) as any
+    g.graph.gates[0].path = ''
+    expect(validateOrb(g).ok).toBe(false)
+  })
+
+  it('JSON Schemas use the same semver and path patterns', () => {
+    const orbSchema = load(DOCS, 'schema', 'orb.schema.json') as any
+    const gateSchema = load(DOCS, 'schema', 'gate.schema.json') as any
+    expect(orbSchema.properties.version.pattern).toBe(SEMVER_RE.source)
+    expect(gateSchema.properties.version.pattern).toBe(SEMVER_RE.source)
+    expect(orbSchema.properties.healthcheck.properties.evalSet.pattern).toBe(REL_PATH_RE.source)
+    expect(gateSchema.properties.enforces.properties.schema.pattern).toBe(REL_PATH_RE.source)
   })
 })

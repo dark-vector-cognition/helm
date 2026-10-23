@@ -25,7 +25,8 @@ Derived ideas:
 | `skill` | Work. Runs on any model Orb that passes its healthcheck. | Pod       |
 | `graph` | Work built from other Orbs and gates.                    | Workflow  |
 
-Keep models and skills apart. A skill Orb never names a model. The substrate picks
+Keep models and skills apart. Each kind carries only its own section (`skill`,
+`model` or `graph`); the validator rejects the others. A skill Orb never names a model. The substrate picks
 the model Orb for each run. Rule: the cheapest model Orb that passes the skill's
 healthcheck.
 
@@ -114,13 +115,18 @@ Rules the validator enforces:
 The model is not deterministic, even at temperature 0. Gates make the path
 deterministic and check every output. That is the guarantee this spec makes.
 
-## 7. Versions
+## 7. Paths
 
-`name` is kebab-case. `version` is semver. A changed Orb or Gate gets a new
+Every path in a manifest is relative to the Orb folder. The validator rejects a
+leading `/`, `~` or drive letter, and any `..` segment.
+
+## 8. Versions
+
+`name` is kebab-case. `version` follows semver.org 2.0.0. A changed Orb or Gate gets a new
 version. The run log stores the version with each run, so a replay uses the
 same Orb.
 
-## 8. Files in this folder
+## 9. Files in this folder
 
 - `schema/orb.schema.json`, `schema/gate.schema.json`: JSON Schemas (draft 2020-12)
   for editors and third-party authors.
@@ -129,7 +135,7 @@ same Orb.
 - `examples/doc-digest`: a graph Orb with three gates, one of them human.
 - `src/main/orbs/manifest.ts`: the validator the substrate runs. No dependencies.
 
-## 9. Not in v0.1
+## 10. Not in v0.1
 
 - Collections manifest.
 - Orb install, update and removal flows.
