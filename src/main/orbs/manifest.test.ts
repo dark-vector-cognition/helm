@@ -204,3 +204,18 @@ describe('review fixes (PR #68)', () => {
     expect(gateSchema.properties.enforces.properties.schema.pattern).toBe(REL_PATH_RE.source)
   })
 })
+
+describe('access rejects unknown keys (CodeRabbit, PR #68)', () => {
+  const skill = load(EXAMPLES, 'pdf-to-markdown', 'orb.json')
+
+  it('rejects a misspelled localOnly instead of failing open', () => {
+    const bad = clone(skill) as any
+    bad.access = { approval: 'none', localonly: true }
+    expect(validateOrb(bad).errors).toContain('access.localonly is not a known field')
+  })
+
+  it('orb.schema.json closes the access object', () => {
+    const orbSchema = load(DOCS, 'schema', 'orb.schema.json') as any
+    expect(orbSchema.properties.access.additionalProperties).toBe(false)
+  })
+})
