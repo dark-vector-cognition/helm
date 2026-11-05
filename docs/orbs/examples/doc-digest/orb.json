@@ -1,0 +1,83 @@
+{
+  "$schema": "../../schema/orb.schema.json",
+  "specVersion": "0.1",
+  "name": "doc-digest",
+  "version": "0.1.0",
+  "kind": "graph",
+  "description": "Fetch a document, convert it to Markdown, summarize it, and hold the summary for human approval.",
+  "graph": {
+    "entry": "fetch",
+    "nodes": [
+      {
+        "id": "fetch",
+        "mode": "code"
+      },
+      {
+        "id": "convert",
+        "uses": "pdf-to-markdown",
+        "mode": "llm",
+        "outputSchema": "schemas/markdown-doc.json"
+      },
+      {
+        "id": "route",
+        "uses": "doc-classifier",
+        "mode": "classifier"
+      },
+      {
+        "id": "summarize",
+        "uses": "summarizer",
+        "mode": "llm",
+        "outputSchema": "schemas/summary.json"
+      },
+      {
+        "id": "deliver",
+        "mode": "code"
+      }
+    ],
+    "edges": [
+      {
+        "from": "fetch",
+        "to": "convert",
+        "gate": "file-type"
+      },
+      {
+        "from": "convert",
+        "to": "route",
+        "gate": "markdown-shape"
+      },
+      {
+        "from": "route",
+        "to": "summarize",
+        "gate": "markdown-shape"
+      },
+      {
+        "from": "summarize",
+        "to": "deliver",
+        "gate": "publish-approval"
+      }
+    ],
+    "gates": [
+      {
+        "id": "file-type",
+        "path": "gates/file-type.gate.json"
+      },
+      {
+        "id": "markdown-shape",
+        "path": "gates/markdown-shape.gate.json"
+      },
+      {
+        "id": "publish-approval",
+        "path": "gates/publish-approval.gate.json"
+      }
+    ]
+  },
+  "access": {
+    "approval": "every-run",
+    "localOnly": false
+  },
+  "healthcheck": {
+    "evalSet": "evals/cases.jsonl",
+    "passThreshold": 0.75,
+    "minCases": 30
+  }
+}
