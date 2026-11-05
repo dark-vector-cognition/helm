@@ -177,6 +177,7 @@
     "access": {
       "type": "object",
       "required": ["approval"],
+      "additionalProperties": false,
       "properties": {
         "approval": {
           "enum": ["none", "first-use", "every-run"]
