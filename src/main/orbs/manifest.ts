@@ -158,8 +158,15 @@ export function validateOrb(input: unknown): ValidationResult {
 
   if (!isObj(m.access) || !oneOf(APPROVALS, m.access.approval)) {
     errors.push(`access.approval must be one of ${APPROVALS.join(', ')}`)
-  } else if (m.access.localOnly !== undefined && typeof m.access.localOnly !== 'boolean') {
-    errors.push('access.localOnly must be a boolean')
+  } else {
+    if (m.access.localOnly !== undefined && typeof m.access.localOnly !== 'boolean') {
+      errors.push('access.localOnly must be a boolean')
+    }
+    for (const key of Object.keys(m.access)) {
+      if (key !== 'approval' && key !== 'localOnly') {
+        errors.push(`access.${key} is not a known field`)
+      }
+    }
   }
 
   if (m.requests !== undefined) {
