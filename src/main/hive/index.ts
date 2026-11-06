@@ -88,7 +88,7 @@ export function setupHiveIPC(mainWindow: BrowserWindow, hiveConfig: HiveConfig):
     enabled: hiveConfig.enabled && process.platform !== 'win32',
     reason: process.platform === 'win32'
       ? 'Managed agent launch is not available on Windows in this build. Monitoring remains available.'
-      : !hiveConfig.enabled ? 'Agent launch is disabled in this installation. Monitoring remains available.' : undefined
+      : !hiveConfig.enabled ? 'Agent launch is disabled in this installation. Set HELM_HIVE_ENABLED=1 to enable it. Monitoring remains available.' : undefined
   }))
   ipcMain.handle(IPC_CHANNELS.HIVE_RETRY, (_event, id: string) => {
     if (!hiveConfig.enabled) return { success: false, error: 'HIVE is disabled' }

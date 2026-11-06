@@ -1,6 +1,10 @@
 # HELM roadmap
 
-Updated October 18, 2026. The dates below are roadmap targets, not release promises. Publication of this roadmap does not release a milestone.
+Updated October 21, 2026. The dates below are roadmap targets, not release promises. Publication of this roadmap does not release a milestone.
+
+## Released: 6.0.0
+
+Version `6.0.0` was released on October 21, 2026. It adds supervised agent runs, the Signal interface and a signed and notarized macOS DMG for Apple Silicon. See the [v6.0.0 release](https://github.com/dark-vector-cognition/helm/releases/tag/v6.0.0) and the [release notes](releases/v6.0.0.md).
 
 ## Released: 5.0.0
 

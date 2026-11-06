@@ -144,6 +144,10 @@ it('cleans up window services before reopening and respects the HIVE enable swit
   const disabledResult = await mocks.handlers.get(IPC_CHANNELS.HIVE_SPAWN)!(null, request)
   expect(disabledResult).toEqual({ success: false, error: 'HIVE is disabled' })
   expect(mocks.spawn).not.toHaveBeenCalled()
+  expect(mocks.handlers.get(IPC_CHANNELS.HIVE_LAUNCH_STATE)!()).toEqual({
+    enabled: false,
+    reason: 'Agent launch is disabled in this installation. Set HELM_HIVE_ENABLED=1 to enable it. Monitoring remains available.'
+  })
 
   mocks.windows[0].events.get('closed')!()
   expect(mocks.stopMonitoring).toHaveBeenCalledTimes(1)
