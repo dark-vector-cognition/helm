@@ -62,7 +62,7 @@
     "@types/react": "^18.2.48",
     "@types/react-dom": "^18.2.18",
     "@vitejs/plugin-react": "^4.2.1",
-    "electron": "^41.10.7",
+    "electron": "^45.1.0",
     "electron-builder": "^26.15.0",
     "electron-vite": "^3.1.0",
     "prettier": "^3.2.4",
@@ -70,6 +70,6 @@
     "react-dom": "^18.2.0",
     "typescript": "^5.3.3",
     "vite": "^6.4.4",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.12"
   }
 }
