@@ -104,6 +104,17 @@ describe('buildExposedServices', () => {
     )[0]
     expect(service.connections).toEqual({ loopback: 1, lan: 1, internet: 0, unknown: 0 })
   })
+
+  it('keeps IPv6 connections off an IPv4 wildcard listener', () => {
+    const service = buildExposedServices(
+      [listen(8080, 'node', '0.0.0.0', 42)],
+      [
+        { ...conn(8080, 42, 'lan'), localAddress: '192.168.1.20', protocol: 'tcp4' },
+        { ...conn(8080, 42, 'loopback'), localAddress: '::1', protocol: 'tcp6' }
+      ]
+    )[0]
+    expect(service.connections).toEqual({ loopback: 0, lan: 1, internet: 0, unknown: 0 })
+  })
 })
 
 describe('matchFirewall', () => {

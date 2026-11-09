@@ -116,6 +116,7 @@ export function buildExposedServices(
     const listener = listeners.find((entry) => {
       if (entry.port !== connection.localPort || entry.pid !== connection.pid || entry.protocol !== protocol) return false
       const bind = normalizeBindAddress(entry.address)
+      if (bind === '0.0.0.0') return !address.includes(':')
       return bind === address || WILDCARD_BINDS.has(bind)
     })
     if (!listener) continue
