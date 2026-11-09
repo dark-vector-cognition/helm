@@ -4,6 +4,7 @@ import { homedir } from 'os'
 import { IPC_CHANNELS } from '../../shared/types'
 import type {
   HiveConfig,
+  HiveReviewRequest,
   HiveRoleTemplate,
   HiveSpawnRequest,
   HiveSessionInfo
@@ -79,7 +80,7 @@ export function resolveHiveConfig(userConfig?: Partial<HiveConfig>): HiveConfig 
 
 export function setupHiveIPC(mainWindow: BrowserWindow, hiveConfig: HiveConfig): void {
   notifyManaged = () => {
-    if (!mainWindow.isDestroyed()) mainWindow.webContents.send(IPC_CHANNELS.HIVE_SESSION_UPDATE, managed?.list() ?? [])
+    if (!mainWindow.isDestroyed()) mainWindow.webContents.send(IPC_CHANNELS.HIVE_SESSION_UPDATE, managed?.listSummaries() ?? [])
   }
   try {
     managed ??= new ManagedHive(join(app.getPath('userData'), 'hive-runs'), join(__dirname, 'hive-worker.js'), () => notifyManaged(), hiveConfig.claudeBinPath)
@@ -99,7 +100,12 @@ export function setupHiveIPC(mainWindow: BrowserWindow, hiveConfig: HiveConfig):
     if (!hiveConfig.enabled) return { success: false, error: 'HIVE is disabled' }
     return managed?.retry(id) ?? { success: false, error: managedError }
   })
-  ipcMain.handle(IPC_CHANNELS.HIVE_REVIEW, (_event, id: string) => managed?.review(id) ?? { success: false, error: managedError })
+  ipcMain.handle(IPC_CHANNELS.HIVE_REVIEW, (_event, id: string, decision?: HiveReviewRequest) =>
+    managed?.review(id, decision) ?? { success: false, error: managedError })
+  ipcMain.handle(IPC_CHANNELS.HIVE_READ_REVIEW_EVIDENCE, (event, id: string, evidenceId: string) => {
+    if (mainWindow.isDestroyed() || event.sender !== mainWindow.webContents) return undefined
+    return managed?.reviewEvidence(id, evidenceId)
+  })
   ipcMain.handle(IPC_CHANNELS.HIVE_SPAWN, async (_event, request: HiveSpawnRequest) => {
     if (!hiveConfig.enabled) return { success: false, error: 'HIVE is disabled' }
     if (request?.provider) return managed?.launch(request) ?? { success: false, error: managedError }
@@ -111,13 +117,14 @@ export function setupHiveIPC(mainWindow: BrowserWindow, hiveConfig: HiveConfig):
     const result = await killHiveSession(sessionId)
     if (result.success && !mainWindow.isDestroyed()) {
       const sessions = await listHiveSessions(hiveConfig.tmuxSessionPrefix)
-      mainWindow.webContents.send(IPC_CHANNELS.HIVE_SESSION_UPDATE, sessions)
+      mainWindow.webContents.send(IPC_CHANNELS.HIVE_SESSION_UPDATE, [...(managed?.listSummaries() ?? []), ...sessions])
     }
     return result
   })
 
   ipcMain.handle(IPC_CHANNELS.HIVE_LIST_SESSIONS, async () => {
-    return [...(managed?.list() ?? []), ...await listHiveSessions(hiveConfig.tmuxSessionPrefix)]
+    const sessions = await listHiveSessions(hiveConfig.tmuxSessionPrefix)
+    return [...(managed?.listSummaries() ?? []), ...sessions]
   })
 
   ipcMain.handle(IPC_CHANNELS.HIVE_SEND_MESSAGE, async (_event, sessionId: string, message: string) => {
@@ -146,6 +153,7 @@ export function teardownHive(): void {
   ipcMain.removeHandler(IPC_CHANNELS.HIVE_LAUNCH_STATE)
   ipcMain.removeHandler(IPC_CHANNELS.HIVE_RETRY)
   ipcMain.removeHandler(IPC_CHANNELS.HIVE_REVIEW)
+  ipcMain.removeHandler(IPC_CHANNELS.HIVE_READ_REVIEW_EVIDENCE)
   ipcMain.removeHandler(IPC_CHANNELS.HIVE_SPAWN)
   ipcMain.removeHandler(IPC_CHANNELS.HIVE_KILL_SESSION)
   ipcMain.removeHandler(IPC_CHANNELS.HIVE_LIST_SESSIONS)

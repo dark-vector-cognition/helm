@@ -23,7 +23,9 @@ import type {
   SentinelAlert,
   HiveSpawnRequest,
   HiveSpawnResult,
-  HiveSessionInfo,
+  HiveReviewRequest,
+  HiveReviewEvidence,
+  HiveSessionSummary,
   VaultHealthStatus,
   VaultSearchResponse,
   VaultChunk,
@@ -248,7 +250,11 @@ const api = {
 
   hiveRetry: (sessionId: string): Promise<HiveSpawnResult> => ipcRenderer.invoke(IPC_CHANNELS.HIVE_RETRY, sessionId),
 
-  hiveReview: (sessionId: string): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke(IPC_CHANNELS.HIVE_REVIEW, sessionId),
+  hiveReview: (sessionId: string, decision?: HiveReviewRequest): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.HIVE_REVIEW, sessionId, decision),
+
+  hiveReadReviewEvidence: (sessionId: string, evidenceId: string): Promise<HiveReviewEvidence | undefined> =>
+    ipcRenderer.invoke(IPC_CHANNELS.HIVE_READ_REVIEW_EVIDENCE, sessionId, evidenceId),
 
   hiveSpawn: (request: HiveSpawnRequest): Promise<HiveSpawnResult> =>
     ipcRenderer.invoke(IPC_CHANNELS.HIVE_SPAWN, request),
@@ -256,7 +262,7 @@ const api = {
   hiveKillSession: (sessionId: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke(IPC_CHANNELS.HIVE_KILL_SESSION, sessionId),
 
-  hiveListSessions: (): Promise<HiveSessionInfo[]> =>
+  hiveListSessions: (): Promise<HiveSessionSummary[]> =>
     ipcRenderer.invoke(IPC_CHANNELS.HIVE_LIST_SESSIONS),
 
   hiveSendMessage: (sessionId: string, message: string): Promise<{ success: boolean; error?: string }> =>
@@ -271,8 +277,8 @@ const api = {
   hiveAttach: (sessionId: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke(IPC_CHANNELS.HIVE_ATTACH, sessionId),
 
-  onHiveSessionUpdate: (callback: (sessions: HiveSessionInfo[]) => void): (() => void) => {
-    const handler = (_event: Electron.IpcRendererEvent, sessions: HiveSessionInfo[]): void =>
+  onHiveSessionUpdate: (callback: (sessions: HiveSessionSummary[]) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, sessions: HiveSessionSummary[]): void =>
       callback(sessions)
     ipcRenderer.on(IPC_CHANNELS.HIVE_SESSION_UPDATE, handler)
     return (): void => {

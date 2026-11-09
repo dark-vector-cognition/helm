@@ -77,6 +77,41 @@ export type HiveProvider = 'claude-code' | 'cursor' | 'codex'
 export type HivePermissionMode = 'read-only' | 'workspace-write'
 export type HiveTaskState = 'starting' | 'working' | 'stopping' | 'needs-review' | 'reviewed' | 'failed' | 'stopped' | 'interrupted'
 
+export interface HiveCommandEvidence {
+  command: string
+  exitCode: number | null
+  isTest: boolean
+}
+
+export interface HiveReviewEvidence {
+  id: string
+  git:
+    | { status: 'captured'; baseCommit: string; patch: string; untracked: string[] }
+    | { status: 'unavailable'; reason: string }
+  commandCapture: 'captured' | 'partial' | 'unavailable'
+  commands: HiveCommandEvidence[]
+}
+
+export interface HiveReviewEvidenceSummary {
+  id: string
+  git:
+    | { status: 'captured'; baseCommit: string; hasPatch: boolean; untrackedCount: number }
+    | { status: 'unavailable'; reason: string }
+  commandCapture: HiveReviewEvidence['commandCapture']
+  commandCount: number
+  testExits: { zero: number; nonzero: number; unknown: number }
+}
+
+export interface HiveReviewRequest {
+  evidenceId: string
+  outcome: 'accepted' | 'follow-up-requested'
+  reason?: string
+}
+
+export interface HiveReviewDecision extends HiveReviewRequest {
+  at: number
+}
+
 export interface HiveRoleTemplate {
   name: HiveRoleName
   displayName: string
@@ -107,8 +142,13 @@ export interface HiveSessionInfo {
   parentSessionId?: string
   timeoutSeconds?: number
   events?: { at: number; state: HiveTaskState; message: string }[]
+  evidence?: HiveReviewEvidence
+  decision?: HiveReviewDecision
 }
 
+export type HiveSessionSummary = Omit<HiveSessionInfo, 'evidence'> & {
+  evidence?: HiveReviewEvidenceSummary
+}
 
 export interface HiveSpawnRequest {
   provider?: HiveProvider
@@ -449,6 +489,7 @@ export const IPC_CHANNELS = {
   HIVE_SESSION_UPDATE: 'hive:session-update',
   HIVE_RETRY: 'hive:retry',
   HIVE_REVIEW: 'hive:review',
+  HIVE_READ_REVIEW_EVIDENCE: 'hive:read-review-evidence',
   HIVE_LAUNCH_STATE: 'hive:launch-state'
 } as const
 

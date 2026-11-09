@@ -1,4 +1,5 @@
-import type { HiveProvider, HiveSpawnRequest } from '../../shared/types'
+import type { HiveCommandEvidence, HiveProvider, HiveSpawnRequest } from '../../shared/types'
+import { COMMAND_LENGTH_LIMIT, resemblesCredential } from './evidence-safety'
 
 export function buildProviderCommand(
   request: HiveSpawnRequest,
@@ -56,6 +57,7 @@ interface ProviderEvent {
   result?: string
   error?: string
   finished?: boolean
+  command?: { id: string; value: HiveCommandEvidence } | null
 }
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -67,6 +69,29 @@ function record(value: unknown): Record<string, unknown> | null {
 function text(value: unknown, limit = 32_768): string | undefined {
   if (typeof value !== 'string' || !value.trim()) return undefined
   return value.replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, '').slice(0, limit)
+}
+
+function isTestCommand(command: string): boolean {
+  const shell = command.match(/^\/(?:usr\/)?bin\/(?:bash|zsh|sh) -lc (?:'([^']+)'|"([^"$`\\]+)")$/)
+  const body = (shell ? shell[1] ?? shell[2] : command).trim()
+  // Recognize only simple invocations. Shell expressions and pipelines can mask
+  // a test process's exit code, even when the command text contains a test runner.
+  if (!/^[\w./@+,:=-]+(?: +[\w./@+,:=-]+)*$/.test(body)) return false
+  const args = body.split(/ +/)
+  if (args.some((arg) => /^(?:-h|-V|--(?:help|version|collect-only|list|list-tests|dry-run|showconfig))$/.test(arg)) || /\bvitest list(?: |$)/.test(body)) return false
+  return /^(?:(?:npm|pnpm|yarn|bun) (?:run )?test(?::[\w-]+)*|(?:npx |pnpm exec )?vitest(?: run)?|(?:uv run )?pytest|python(?:3(?:\.\d+)?)? (?:-B )?-m (?:unittest|pytest)|node --test|(?:cargo|go|swift|dotnet|make) test)(?: |$)/.test(body)
+}
+
+function commandEvidence(item: Record<string, unknown>): ProviderEvent['command'] {
+  const { id, command, exit_code: exitCode } = item
+  if (typeof id !== 'string' || !id || id.length > 100 || typeof command !== 'string' || !command.trim() ||
+    command.length > COMMAND_LENGTH_LIMIT || /[\x00-\x1f\x7f-\x9f\u202a-\u202e\u2066-\u2069]/.test(command) ||
+    /\bcurl\b.*\s(?:-[ubU]|--(?:user|proxy-user|oauth2-bearer|cookie)(?:\b|=))/.test(command) ||
+    /--(?:api-key|token|password|secret|auth)(?:[ =]|$)/i.test(command) || resemblesCredential(command)) return null
+  return {
+    id,
+    value: { command, exitCode: typeof exitCode === 'number' && Number.isSafeInteger(exitCode) ? exitCode : null, isTest: isTestCommand(command) }
+  }
 }
 
 export function parseProviderEvent(provider: HiveProvider, value: unknown): ProviderEvent | null {
@@ -114,6 +139,9 @@ export function parseProviderEvent(provider: HiveProvider, value: unknown): Prov
   if (event.type === 'turn.completed' && record(event.usage)) return { finished: true }
   const item = record(event.item)
   if (!item || typeof item.type !== 'string') return null
+  if (event.type === 'item.completed' && item.type === 'command_execution') {
+    return { accepted: true, activity: 'Step completed', command: commandEvidence(item) }
+  }
   if (event.type === 'item.completed' && item.type === 'agent_message') {
     const result = text(item.text)
     return result ? { accepted: true, result, activity: 'Agent responded' } : null

@@ -3,6 +3,7 @@ import { useHiveStore } from '../stores/hive'
 import { useSystemStore } from '../stores/system'
 import { redactSensitiveText, usePrivacyStore } from '../stores/privacy'
 import { getRunStages } from '../stores/run-stages'
+import { HiveReviewCard } from './HiveReviewCard'
 import type {
   HiveRoleName,
   HiveModel,
@@ -56,6 +57,7 @@ export function HiveLauncher(): JSX.Element {
   const activeCount = sessions.filter((s) =>
     s.taskState ? ACTIVE.has(s.taskState) : s.status === 'running'
   ).length
+  const needsReviewCount = sessions.filter((session) => session.taskState === 'needs-review').length
   const canLaunch = enabled && !loading && confirmed && !!workingDir.trim() && !!objective.trim()
   const fieldClass = 'shell-run-field'
   const actionClass = 'shell-run-action'
@@ -83,7 +85,7 @@ export function HiveLauncher(): JSX.Element {
         <div>
           <span className="shell-run-label">Agent control</span>
           <span className="ml-2 text-[10px] text-gray-400">
-            {activeCount} running · {sessions.length} recorded
+            {activeCount} running · {needsReviewCount} needs review · {sessions.length} recorded
           </span>
         </div>
         <button
@@ -238,7 +240,8 @@ export function HiveLauncher(): JSX.Element {
             />
             <span>
               I approve sending this objective to {PROVIDERS.find((p) => p.id === provider)?.name},
-              the selected permissions, and saving the run and its result locally.
+              the selected permissions, and saving the run, result, and raw captured evidence in the
+              private journal on disk. This applies with Secure View on.
             </span>
           </label>
           <button
@@ -258,6 +261,7 @@ export function HiveLauncher(): JSX.Element {
           {sessions.length === 0 && <p className="text-xs text-gray-500">No runs recorded yet.</p>}
           {sessions.map((session) => {
             const managed = !!session.taskState
+            const maskManaged = privacyMode && managed
             const active = managed ? ACTIVE.has(session.taskState!) : session.status === 'running'
             return (
               <article
@@ -276,10 +280,14 @@ export function HiveLauncher(): JSX.Element {
                       : `Legacy terminal · ${session.status}`}
                   </span>
                 </div>
-                <p className="text-[11px] text-gray-400 break-all">{display(session.workingDir)}</p>
+                <p className="text-[11px] text-gray-400 break-all">
+                  {maskManaged ? 'Workspace hidden in Secure View.' : display(session.workingDir)}
+                </p>
                 {managed && (
                   <>
-                    <p className="shell-run-objective">{display(session.objective ?? '')}</p>
+                    <p className="shell-run-objective">
+                      {maskManaged ? 'Objective hidden in Secure View.' : display(session.objective ?? '')}
+                    </p>
                     <div className="shell-run-stage" role="group" aria-label={`Run state: ${session.taskState}`}>
                       {getRunStages(session).map((stage) => (
                         <div key={stage.label}>
@@ -313,13 +321,13 @@ export function HiveLauncher(): JSX.Element {
                 )}
                 {session.error && (
                   <p role="alert" className="text-xs text-red-300 whitespace-pre-wrap break-words">
-                    {display(session.error)}
+                    {maskManaged ? 'Run error details hidden in Secure View.' : display(session.error)}
                   </p>
                 )}
-                {session.taskState === 'needs-review' && (
+                {session.taskState === 'needs-review' && !session.evidence && (
                   <p className="text-xs text-amber-300">
                     The provider returned a result. Inspect it before you mark it reviewed; a result
-                    does not prove the objective is complete.
+                    does not prove the objective is complete. No structured evidence was recorded for this run.
                   </p>
                 )}
                 {session.events && session.events.length > 0 && (
@@ -331,7 +339,7 @@ export function HiveLauncher(): JSX.Element {
                       {session.events.map((event, index) => (
                         <li key={index} className="break-words">
                           {new Date(event.at).toLocaleTimeString()} · {event.state} ·{' '}
-                          {display(event.message)}
+                          {maskManaged ? 'Details hidden in Secure View.' : display(event.message)}
                         </li>
                       ))}
                     </ol>
@@ -343,9 +351,19 @@ export function HiveLauncher(): JSX.Element {
                       Inspect result
                     </summary>
                     <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs text-gray-300">
-                      {display(session.result)}
+                      {maskManaged ? 'Provider result hidden in Secure View.' : display(session.result)}
                     </pre>
                   </details>
+                )}
+                {session.evidence && (
+                  <HiveReviewCard
+                    runId={session.id}
+                    evidence={session.evidence}
+                    decision={session.decision}
+                    secure={privacyMode}
+                    canReview={session.taskState === 'needs-review'}
+                    onDecision={(decision) => review(session.id, decision)}
+                  />
                 )}
                 <div className="flex flex-wrap items-center gap-2">
                   {!managed && active && (
@@ -427,7 +445,7 @@ export function HiveLauncher(): JSX.Element {
                         Retry
                       </button>
                     ))}
-                  {session.taskState === 'needs-review' && (
+                  {session.taskState === 'needs-review' && !session.evidence && (
                     <button
                       type="button"
                       onClick={() => {

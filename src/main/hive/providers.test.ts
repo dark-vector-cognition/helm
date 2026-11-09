@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { resemblesCredential } from './evidence-safety'
 import { buildProviderCommand, parseProviderEvent } from './providers'
 import type { HiveProvider, HiveSpawnRequest } from '../../shared/types'
 
@@ -99,6 +100,26 @@ describe('provider event parsing', () => {
     expect(parseProviderEvent('codex', { type: 'turn.failed', error: { message: 'Permission denied' } })).toEqual({ error: 'Permission denied', finished: true })
     expect(parseProviderEvent('codex', { type: 'error', message: 'Stream disconnected' })).toEqual({ error: 'Stream disconnected' })
     expect(parseProviderEvent('codex', { type: 'item.started', item: { type: 'command_execution', command: 'private command' } })).toEqual({ accepted: true, activity: 'Agent working' })
+  })
+
+  it('uses structured completion and a simple test invocation without storing output or secrets', () => {
+    const completed = (command: string, exitCode: unknown = 1) => parseProviderEvent('codex', {
+      type: 'item.completed', item: { id: 'item_0', type: 'command_execution', command, exit_code: exitCode, aggregated_output: 'private test output' }
+    })
+    const test = "/bin/zsh -lc 'python3 -B -m unittest -v'"
+    expect(completed(test)?.command).toEqual({ id: 'item_0', value: { command: test, exitCode: 1, isTest: true } })
+    expect(completed('npm test || true', 0)?.command?.value.isTest).toBe(false)
+    expect(completed('vitest list', 0)?.command?.value.isTest).toBe(false)
+    expect(completed('pytest --collect-only', 0)?.command?.value.isTest).toBe(false)
+    expect(completed('npm test', '0')?.command?.value.exitCode).toBeNull()
+    expect(completed('curl -u fixture:private https://example.invalid')?.command).toBeNull()
+    expect(completed('curl -H "Cookie: private" https://example.invalid')?.command).toBeNull()
+    expect(JSON.stringify(completed(test))).not.toContain('private test output')
+  })
+
+  it('recognizes URL credentials without treating a colon-heavy noncredential string as userinfo', () => {
+    expect(resemblesCredential('https://user:fixture:password@example.invalid/path')).toBe(true)
+    expect(resemblesCredential(`https://fixture${':'.repeat(24_000)}no-at-sign`)).toBe(false)
   })
 
   it('bounds results and errors and removes terminal escapes', () => {

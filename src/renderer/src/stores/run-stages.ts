@@ -1,6 +1,6 @@
 import type { HiveSessionInfo } from '../../../shared/types'
 
-export function getRunStages(session: HiveSessionInfo): {
+export function getRunStages(session: Omit<HiveSessionInfo, 'evidence'>): {
   label: string
   done: boolean
   current: boolean

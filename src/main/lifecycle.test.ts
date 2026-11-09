@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   hiveEnabled: false,
   spawn: vi.fn(async () => ({ success: true })),
   killSession: vi.fn(),
+  reviewEvidence: vi.fn(() => ({ id: 'receipt-id' })),
   managedShutdown: vi.fn(),
   managedUpdate: undefined as (() => void) | undefined,
   startMonitoring: vi.fn(),
@@ -82,7 +83,8 @@ vi.mock('./hive/managed', () => ({ ManagedHive: class {
   constructor(_directory: string, _worker: string, onUpdate: () => void) { mocks.managedUpdate = onUpdate }
   launch = mocks.spawn
   shutdown = mocks.managedShutdown
-  list = () => []
+  listSummaries = () => []
+  reviewEvidence = mocks.reviewEvidence
   agents = () => []
   has = () => false
 } }))
@@ -157,6 +159,7 @@ it('cleans up window services before reopening and respects the HIVE enable swit
   expect(mocks.stopMonitoring).toHaveBeenCalledTimes(1)
   expect(vi.getTimerCount()).toBe(0)
   expect(mocks.handlers.has(IPC_CHANNELS.HIVE_SPAWN)).toBe(false)
+  expect(mocks.handlers.has(IPC_CHANNELS.HIVE_READ_REVIEW_EVIDENCE)).toBe(false)
   expect(mocks.killSession).not.toHaveBeenCalled()
   expect(mocks.managedShutdown).not.toHaveBeenCalled()
   mocks.managedUpdate!()
@@ -174,6 +177,12 @@ it('cleans up window services before reopening and respects the HIVE enable swit
   mocks.managedUpdate!()
   expect(mocks.windows[1].webContents.send).toHaveBeenCalledWith(IPC_CHANNELS.HIVE_SESSION_UPDATE, [])
   expect(mocks.windows[0].webContents.send).not.toHaveBeenCalled()
+
+  const readEvidence = mocks.handlers.get(IPC_CHANNELS.HIVE_READ_REVIEW_EVIDENCE)!
+  expect(readEvidence({ sender: mocks.windows[0].webContents }, 'run-id', 'receipt-id')).toBeUndefined()
+  expect(mocks.reviewEvidence).not.toHaveBeenCalled()
+  expect(readEvidence({ sender: mocks.windows[1].webContents }, 'run-id', 'receipt-id')).toEqual({ id: 'receipt-id' })
+  expect(mocks.reviewEvidence).toHaveBeenCalledWith('run-id', 'receipt-id')
 
   Object.defineProperty(process, 'platform', { value: 'win32' })
   expect(mocks.handlers.get(IPC_CHANNELS.HIVE_LAUNCH_STATE)!()).toEqual({

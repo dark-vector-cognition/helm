@@ -1,19 +1,64 @@
 import { fork, type ChildProcess } from 'child_process'
 import { randomUUID } from 'crypto'
 import { lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, writeFileSync, unlinkSync } from 'fs'
-import { isAbsolute, join } from 'path'
-import type { AgentInfo, HiveProvider, HiveSessionInfo, HiveSpawnRequest, HiveSpawnResult, HiveTaskState } from '../../shared/types'
+import { isAbsolute, join, sep } from 'path'
+import type {
+  AgentInfo, HiveCommandEvidence, HiveProvider, HiveReviewEvidence, HiveReviewRequest,
+  HiveSessionInfo, HiveSessionSummary, HiveSpawnRequest, HiveSpawnResult, HiveTaskState
+} from '../../shared/types'
+import { COMMAND_LENGTH_LIMIT, COMMAND_LIMIT } from './evidence-safety'
 import { buildProviderCommand, parseProviderEvent } from './providers'
 
 const ACTIVE = new Set<HiveTaskState>(['starting', 'working', 'stopping'])
 const PROVIDERS: HiveProvider[] = ['claude-code', 'cursor', 'codex']
 const STATES: HiveTaskState[] = ['starting', 'working', 'stopping', 'needs-review', 'reviewed', 'failed', 'stopped', 'interrupted']
 const HISTORY_LIMIT = 500
+const JOURNAL_LIMIT = 128 * 1024
+const REVIEW_RESERVE = 4 * 1024
+const REASON_LIMIT = 500
+type CommandTrace = { commands: Map<string, HiveCommandEvidence | null>; partial: boolean }
+
+function workspacesOverlap(first: string, second: string): boolean {
+  const prefix = (directory: string) => directory.endsWith(sep) ? directory : directory + sep
+  return first === second || first.startsWith(prefix(second)) || second.startsWith(prefix(first))
+}
+
+function gitUnavailable(reason: string): HiveReviewEvidence['git'] {
+  return { status: 'unavailable', reason }
+}
+
+function validGitEvidence(value: unknown): value is HiveReviewEvidence['git'] {
+  const git = value as HiveReviewEvidence['git'] | undefined
+  if (!git) return false
+  if (git.status === 'unavailable') return typeof git.reason === 'string' && git.reason.length <= 300
+  return git.status === 'captured' && typeof git.baseCommit === 'string' && /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(git.baseCommit) &&
+    typeof git.patch === 'string' && Buffer.byteLength(git.patch) <= 24 * 1024 && Array.isArray(git.untracked) &&
+    git.untracked.every((path) => typeof path === 'string' && !!path) && Buffer.byteLength(JSON.stringify(git.untracked)) <= 16 * 1024
+}
+
+function validReviewReason(reason: unknown): boolean {
+  return reason === undefined || (typeof reason === 'string' && reason.length <= REASON_LIMIT && !/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(reason))
+}
+
+function validReviewData(run: HiveSessionInfo): boolean {
+  const { evidence, decision } = run
+  if (evidence === undefined) return decision === undefined
+  if (!evidence || typeof evidence.id !== 'string' || !/^[a-f0-9-]{36}$/.test(evidence.id) || !validGitEvidence(evidence.git) ||
+    !['captured', 'partial', 'unavailable'].includes(evidence.commandCapture) || !Array.isArray(evidence.commands) ||
+    evidence.commands.length > COMMAND_LIMIT || evidence.commands.some((item) => !item || typeof item.command !== 'string' ||
+      !item.command || item.command.length > COMMAND_LENGTH_LIMIT || typeof item.isTest !== 'boolean' ||
+      (item.exitCode !== null && !Number.isSafeInteger(item.exitCode)))) return false
+  return decision === undefined || (!!decision && run.taskState === 'reviewed' && decision.evidenceId === evidence.id &&
+    Number.isFinite(decision.at) && Number.isFinite(new Date(decision.at).getTime()) && validReviewReason(decision.reason) &&
+    (decision.outcome === 'accepted' || (decision.outcome === 'follow-up-requested' && !!decision.reason?.trim())))
+}
 
 export class ManagedHive {
   private runs = new Map<string, HiveSessionInfo>()
   private workers = new Map<string, ChildProcess>()
   private finished = new Set<string>()
+  private commandTraces = new Map<string, CommandTrace>()
+  private overlappingRuns = new Set<string>()
   private recoveredAt = 0
 
   constructor(
@@ -28,14 +73,14 @@ export class ManagedHive {
     for (const name of readdirSync(directory).filter((name) => /^[a-f0-9-]{36}\.json$/.test(name))) {
       try {
         const stat = lstatSync(join(directory, name))
-        if (stat.isFile() && !(stat.mode & 0o077) && stat.size <= 128 * 1024) candidates.push({ name, modifiedAt: stat.mtimeMs })
+        if (stat.isFile() && !(stat.mode & 0o077) && stat.size <= JOURNAL_LIMIT) candidates.push({ name, modifiedAt: stat.mtimeMs })
       } catch { /* A journal can disappear before recovery. */ }
     }
     for (const { name } of candidates.sort((a, b) => b.modifiedAt - a.modifiedAt).slice(0, HISTORY_LIMIT)) {
       try {
         const path = join(directory, name)
         const stat = lstatSync(path)
-        if (!stat.isFile() || stat.mode & 0o077 || stat.size > 128 * 1024) continue
+        if (!stat.isFile() || stat.mode & 0o077 || stat.size > JOURNAL_LIMIT) continue
         const run = JSON.parse(readFileSync(path, 'utf8')) as HiveSessionInfo
         if (run.id !== name.slice(0, -5) || !PROVIDERS.includes(run.provider!) || !STATES.includes(run.taskState!) ||
           typeof run.objective !== 'string' || run.objective.length > 16000 ||
@@ -43,7 +88,7 @@ export class ManagedHive {
           !['read-only', 'workspace-write'].includes(run.permissionMode!) || !Number.isFinite(run.startedAt) || !['default', 'opus', 'sonnet', 'haiku'].includes(run.model) ||
           typeof run.role !== 'string' || run.role.length > 80 ||
           (run.result !== undefined && (typeof run.result !== 'string' || run.result.length > 32000)) ||
-          (run.error !== undefined && typeof run.error !== 'string') ||
+          (run.error !== undefined && typeof run.error !== 'string') || !validReviewData(run) ||
           (run.events !== undefined && (!Array.isArray(run.events) || run.events.length > 50 || run.events.some((event) =>
             !event || !Number.isFinite(event.at) || !STATES.includes(event.state) || typeof event.message !== 'string' || event.message.length > 300)))) continue
         this.runs.set(run.id, run)
@@ -65,6 +110,40 @@ export class ManagedHive {
 
   list(): HiveSessionInfo[] {
     return structuredClone([...this.runs.values()].sort((a, b) => b.startedAt - a.startedAt))
+  }
+
+  listSummaries(): HiveSessionSummary[] {
+    const summaries: HiveSessionSummary[] = [...this.runs.values()]
+      .sort((a, b) => b.startedAt - a.startedAt)
+      .map(({ evidence, ...run }) => {
+        if (!evidence) return run
+        const { git, commands } = evidence
+        const testExits = { zero: 0, nonzero: 0, unknown: 0 }
+        for (const command of commands) {
+          if (!command.isTest) continue
+          if (command.exitCode === null) testExits.unknown++
+          else if (command.exitCode === 0) testExits.zero++
+          else testExits.nonzero++
+        }
+        return {
+          ...run,
+          evidence: {
+            id: evidence.id,
+            commandCapture: evidence.commandCapture,
+            commandCount: commands.length,
+            testExits,
+            git: git.status === 'captured'
+              ? { status: git.status, baseCommit: git.baseCommit, hasPatch: !!git.patch, untrackedCount: git.untracked.length }
+              : { status: git.status, reason: git.reason }
+          }
+        }
+      })
+    return structuredClone(summaries)
+  }
+
+  reviewEvidence(runId: string, evidenceId: string): HiveReviewEvidence | undefined {
+    const evidence = this.runs.get(runId)?.evidence
+    return evidence && evidence.id === evidenceId ? structuredClone(evidence) : undefined
   }
 
   agents(): AgentInfo[] {
@@ -95,12 +174,37 @@ export class ManagedHive {
     run.events = [...(run.events ?? []), { at: run.lastEventAt, state, message: message.slice(0, 300) }].slice(-50)
   }
 
-  private store(run: HiveSessionInfo): boolean {
+  private write(run: HiveSessionInfo, serialized = JSON.stringify(run)): void {
+    if (Buffer.byteLength(serialized) > JOURNAL_LIMIT) throw new Error('Run journal exceeds its size limit.')
     const temporary = join(this.directory, `${run.id}.${randomUUID()}.tmp`)
     try {
       this.ensureDirectory()
-      writeFileSync(temporary, JSON.stringify(run), { mode: 0o600, flag: 'wx' })
+      writeFileSync(temporary, serialized, { mode: 0o600, flag: 'wx' })
       renameSync(temporary, join(this.directory, `${run.id}.json`))
+    } finally {
+      try { unlinkSync(temporary) } catch { /* Renamed or absent. */ }
+    }
+  }
+
+  private store(run: HiveSessionInfo): boolean {
+    try {
+      let serialized = JSON.stringify(run)
+      const budget = JOURNAL_LIMIT - (run.evidence ? REVIEW_RESERVE : 0)
+      if (Buffer.byteLength(serialized) > budget && run.evidence?.git.status === 'captured') {
+        run.evidence.git = gitUnavailable('The full patch and filename inventory exceed the journal size limit.')
+        serialized = JSON.stringify(run)
+      }
+      if (Buffer.byteLength(serialized) > budget && run.evidence?.commands.length) {
+        run.evidence.commands = []
+        run.evidence.commandCapture = 'partial'
+        serialized = JSON.stringify(run)
+      }
+      while (Buffer.byteLength(serialized) > budget && run.result && run.result.length > 1) {
+        run.result = run.result.slice(0, Math.floor(run.result.length / 2))
+        serialized = JSON.stringify(run)
+      }
+      if (Buffer.byteLength(serialized) > budget) throw new Error('Run journal exceeds its size limit.')
+      this.write(run, serialized)
       this.trimHistory()
       this.onUpdate()
       return true
@@ -111,8 +215,6 @@ export class ManagedHive {
       this.trimHistory()
       this.onUpdate()
       return false
-    } finally {
-      try { unlinkSync(temporary) } catch { /* Renamed or absent. */ }
     }
   }
 
@@ -140,6 +242,14 @@ export class ManagedHive {
       this.transition(run, 'starting', 'Launch requested. Provider has not acknowledged the task.')
       this.runs.set(run.id, run)
       if (!this.store(run)) return { success: false, error: run.error }
+      for (const id of this.workers.keys()) {
+        const other = this.runs.get(id)
+        if (other && !other.evidence && workspacesOverlap(other.workingDir, cwd)) {
+          this.overlappingRuns.add(id)
+          this.overlappingRuns.add(run.id)
+        }
+      }
+      if (run.provider === 'codex') this.commandTraces.set(run.id, { commands: new Map(), partial: false })
       const worker = fork(this.workerPath, [], {
         execPath: process.execPath, env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
         stdio: ['ignore', 'ignore', 'ignore', 'ipc']
@@ -147,8 +257,11 @@ export class ManagedHive {
       this.workers.set(run.id, worker)
       worker.on('message', (message) => this.receive(run, message))
       worker.once('error', () => {
+        if (run.evidence) return
         this.transition(run, 'failed', 'Supervisor could not start.')
         run.error = 'Supervisor could not start.'
+        run.finishedAt = Date.now()
+        this.finishEvidence(run)
         this.store(run)
       })
       worker.once('exit', () => {
@@ -158,8 +271,11 @@ export class ManagedHive {
           this.transition(run, 'interrupted', 'Supervisor disconnected before a terminal report.')
           run.error = 'Supervisor disconnected. Inspect workspace changes before retry.'
           run.finishedAt = Date.now()
+          this.finishEvidence(run)
           this.store(run)
         }
+        this.commandTraces.delete(run.id)
+        this.overlappingRuns.delete(run.id)
         this.trimHistory()
       })
       worker.send({ type: 'start', ...command, cwd, input: `Role: ${run.role}\nObjective:\n${run.objective}`, timeoutSeconds: seconds }, () => {})
@@ -169,9 +285,20 @@ export class ManagedHive {
     }
   }
 
+  private finishEvidence(run: HiveSessionInfo, git?: unknown): void {
+    const trace = this.commandTraces.get(run.id)
+    const commands = [...(trace?.commands.values() ?? [])].filter((command): command is HiveCommandEvidence => command !== null)
+    const commandCapture = trace && run.taskState === 'needs-review' && !trace.partial
+      ? 'captured' : commands.length || trace?.partial ? 'partial' : 'unavailable'
+    const gitEvidence = this.overlappingRuns.has(run.id)
+      ? gitUnavailable('Multiple managed runs used this Git worktree at the same time.')
+      : validGitEvidence(git) ? git : gitUnavailable('HELM did not obtain a complete Git comparison.')
+    run.evidence = { id: randomUUID(), git: gitEvidence, commandCapture, commands }
+  }
+
   private receive(run: HiveSessionInfo, raw: unknown): void {
-    if (!raw || typeof raw !== 'object') return
-    const message = raw as { type?: string; pid?: number; event?: unknown; error?: string; code?: number; stopped?: boolean }
+    if (run.evidence || !raw || typeof raw !== 'object') return
+    const message = raw as { type?: string; pid?: number; event?: unknown; error?: string; code?: number; stopped?: boolean; git?: unknown }
     if (message.type === 'spawn' && Number.isInteger(message.pid)) run.pid = message.pid
     if (message.type === 'event') {
       const event = parseProviderEvent(run.provider!, message.event)
@@ -183,6 +310,21 @@ export class ManagedHive {
       if (event.result) run.result = event.result.slice(0, 32000)
       if (event.error) run.error = event.error.slice(0, 1000)
       if (event.finished) this.finished.add(run.id)
+      const trace = this.commandTraces.get(run.id)
+      if (trace && event.command !== undefined) {
+        if (event.command === null) trace.partial = true
+        else {
+          const { id, value } = event.command
+          const previous = trace.commands.get(id)
+          if (previous === undefined && trace.commands.size < COMMAND_LIMIT) {
+            trace.commands.set(id, value)
+            if (value.exitCode === null) trace.partial = true
+          } else if (previous && (previous.command !== value.command || previous.exitCode !== value.exitCode)) {
+            trace.commands.set(id, null)
+            trace.partial = true
+          } else if (previous === undefined) trace.partial = true
+        }
+      }
     }
     if (message.type === 'error') run.error = message.error
     if (message.type === 'exit') {
@@ -199,6 +341,7 @@ export class ManagedHive {
         run.error ??= `Provider exited (${message.code ?? 'signal'}). Check sign-in, permissions and provider limits.`
       }
       this.finished.delete(run.id)
+      this.finishEvidence(run, message.git)
     }
     this.store(run)
   }
@@ -221,11 +364,28 @@ export class ManagedHive {
       role: run.role, model: run.model === 'default' ? undefined : run.model, objective: run.objective, timeoutSeconds: run.timeoutSeconds }, id)
   }
 
-  review(id: string): { success: boolean; error?: string } {
+  review(id: string, decision?: HiveReviewRequest): { success: boolean; error?: string } {
     const run = this.runs.get(id)
     if (!run || run.taskState !== 'needs-review') return { success: false, error: 'No result awaits review.' }
-    this.transition(run, 'reviewed', 'Operator marked the result reviewed.')
-    return { success: this.store(run), error: run.error }
+    const reviewed = structuredClone(run)
+    let message = 'Operator marked the result reviewed.'
+    if (run.evidence) {
+      if (!decision || decision.evidenceId !== run.evidence.id) return { success: false, error: 'The review evidence changed. Refresh and review it again.' }
+      if (!validReviewReason(decision.reason)) return { success: false, error: 'Enter a review reason of at most 500 characters.' }
+      const reason = decision.reason?.trim()
+      if (decision.outcome !== 'accepted' && (decision.outcome !== 'follow-up-requested' || !reason)) {
+        return { success: false, error: 'Choose a decision and give a reason for requested follow-up.' }
+      }
+      reviewed.decision = { evidenceId: run.evidence.id, outcome: decision.outcome, at: Date.now(), ...(reason ? { reason } : {}) }
+      message = decision.outcome === 'accepted' ? 'Operator accepted the reviewed evidence.' : 'Operator requested follow-up on the reviewed evidence.'
+    } else if (decision !== undefined) return { success: false, error: 'This run has no recorded evidence to bind to a decision.' }
+    this.transition(reviewed, 'reviewed', message)
+    try { this.write(reviewed) }
+    catch { return { success: false, error: 'Could not save the review decision. Check disk space and journal permissions.' } }
+    this.runs.set(id, reviewed)
+    this.trimHistory()
+    this.onUpdate()
+    return { success: true }
   }
 
   shutdown(): void {

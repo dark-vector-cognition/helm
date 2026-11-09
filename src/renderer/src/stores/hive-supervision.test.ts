@@ -1,7 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import type { HiveSessionInfo, HiveTaskState } from '../../../shared/types'
+import type {
+  HiveReviewEvidenceSummary,
+  HiveSessionSummary,
+  HiveTaskState
+} from '../../../shared/types'
+
+const view = vi.hoisted(() => ({ privacyMode: true }))
 
 vi.mock('./system', () => ({
   useSystemStore: (select: (state: unknown) => unknown) => select({ state: { gitRepos: [] } })
@@ -10,7 +16,7 @@ vi.mock('./privacy', async () => {
   const actual = await vi.importActual<typeof import('./privacy')>('./privacy')
   return {
     ...actual,
-    usePrivacyStore: (select: (state: unknown) => unknown) => select({ privacyMode: true })
+    usePrivacyStore: (select: (state: unknown) => unknown) => select(view)
   }
 })
 vi.mock('./hive', async () => {
@@ -25,7 +31,7 @@ vi.mock('./hive', async () => {
 import { useHiveStore } from './hive'
 import { HiveLauncher } from '../panels/HiveLauncher'
 
-const session = (taskState?: HiveTaskState): HiveSessionInfo => ({
+const session = (taskState?: HiveTaskState): HiveSessionSummary => ({
   id: `run-${taskState ?? 'legacy'}`,
   role: 'analyst',
   model: 'sonnet',
@@ -56,10 +62,12 @@ let api: {
   hiveSpawn: ReturnType<typeof vi.fn>
   hiveRetry: ReturnType<typeof vi.fn>
   hiveReview: ReturnType<typeof vi.fn>
+  hiveReadReviewEvidence: ReturnType<typeof vi.fn>
   hiveKillSession: ReturnType<typeof vi.fn>
 }
 
 beforeEach(() => {
+  view.privacyMode = true
   vi.useFakeTimers()
   api = {
     hiveListSessions: vi.fn().mockResolvedValue([]),
@@ -68,6 +76,7 @@ beforeEach(() => {
     hiveSpawn: vi.fn().mockResolvedValue({ success: true }),
     hiveRetry: vi.fn().mockResolvedValue({ success: true }),
     hiveReview: vi.fn().mockResolvedValue({ success: true }),
+    hiveReadReviewEvidence: vi.fn().mockResolvedValue(undefined),
     hiveKillSession: vi.fn().mockResolvedValue({ success: true })
   }
   vi.stubGlobal('window', { helm: api })
@@ -148,7 +157,110 @@ describe('managed agent launcher', () => {
     expect(html).toContain('/Users/operator/workspace')
     expect(html).not.toContain('/Users/private')
     expect(html).not.toContain('private.example')
-    expect(html).toContain('private-gateway.redacted')
+    expect(html).toContain('Provider result hidden in Secure View')
+    expect(html).toContain('Run error details hidden in Secure View')
+    expect(html).toContain('Details hidden in Secure View')
+    expect(html).not.toContain('Result at')
+  })
+
+  it('shows review summaries and opens raw evidence only on demand with Secure View off', () => {
+    const evidence: HiveReviewEvidenceSummary = {
+      id: 'fixture-receipt',
+      git: {
+        status: 'captured',
+        baseCommit: 'a'.repeat(40),
+        hasPatch: true,
+        untrackedCount: 1
+      },
+      commandCapture: 'partial',
+      commandCount: 4,
+      testExits: { zero: 1, nonzero: 1, unknown: 1 }
+    }
+    useHiveStore.setState({
+      sessions: [
+        {
+          ...session('needs-review'),
+          evidence,
+          workingDir: '/private/var/folders/fixture/T/demo workspace',
+          result: 'Provider echoed npm test -- fixture-one'
+        },
+        { ...session('starting'), workingDir: '/var/folders/fixture/T/another workspace' },
+        { ...session(), workingDir: '/var/folders/fixture/T/legacy workspace' }
+      ]
+    })
+    const secure = render()
+    expect(secure).toContain('1 needs review')
+    expect(secure).toContain('Command capture is partial')
+    expect(secure).toContain('Test command exits · 1 zero · 1 nonzero · 1 unknown')
+    expect(secure).toContain('Secure View hides raw diffs')
+    expect(secure).toContain('Provider result hidden in Secure View')
+    expect(secure).toContain('Workspace hidden in Secure View')
+    expect(secure).toContain('Objective hidden in Secure View')
+    expect(secure).toContain('private journal on disk. This applies with Secure View on.')
+    expect(secure).toContain('[private temporary path]')
+    expect(secure).toContain('Request follow-up')
+    expect(secure).not.toContain('Mark reviewed')
+    expect(secure).not.toContain('/var/folders')
+    expect(secure).not.toContain('Inspect Git diff')
+    expect(secure).not.toContain('Inspect untracked file names')
+    expect(secure).not.toContain('Inspect recorded commands')
+    expect(secure).not.toContain('npm test -- fixture-one')
+
+    view.privacyMode = false
+    const unmasked = render()
+    expect(unmasked).toContain('Inspect Git diff')
+    expect(unmasked).toContain('Inspect untracked file names')
+    expect(unmasked).toContain('Inspect recorded commands')
+    expect(unmasked).not.toContain('Exit status unknown')
+    expect(api.hiveReadReviewEvidence).not.toHaveBeenCalled()
+  })
+
+  it('keeps unavailable evidence explicit and displays a recorded disposition', () => {
+    const evidence: HiveReviewEvidenceSummary = {
+      id: 'fixture-receipt',
+      git: { status: 'unavailable', reason: 'Fixture Git baseline unavailable' },
+      commandCapture: 'unavailable',
+      commandCount: 0,
+      testExits: { zero: 0, nonzero: 0, unknown: 0 }
+    }
+    useHiveStore.setState({
+      sessions: [
+        {
+          ...session('reviewed'),
+          evidence,
+          decision: {
+            evidenceId: evidence.id,
+            outcome: 'follow-up-requested',
+            reason: 'Fixture follow-up reason',
+            at: 3000
+          }
+        }
+      ]
+    })
+    const secure = render()
+    expect(secure).toContain('Git evidence unavailable')
+    expect(secure).toContain('Command capture unavailable')
+    expect(secure).toContain('No test commands reported')
+    expect(secure).toContain('Follow-up requested')
+    expect(secure).not.toContain('Fixture Git baseline unavailable')
+    expect(secure).not.toContain('Fixture follow-up reason')
+    expect(secure).not.toContain('>Request follow-up</button>')
+    expect(secure).not.toContain('>Accept</button>')
+
+    view.privacyMode = false
+    const unmasked = render()
+    expect(unmasked).toContain('Fixture Git baseline unavailable')
+    expect(unmasked).toContain('Fixture follow-up reason')
+  })
+
+  it('sends a review outcome against the exact evidence ID', async () => {
+    const decision = {
+      evidenceId: 'fixture-receipt',
+      outcome: 'follow-up-requested',
+      reason: 'Run the focused tests'
+    } as const
+    expect(await useHiveStore.getState().review('run-needs-review', decision)).toBe(true)
+    expect(api.hiveReview).toHaveBeenCalledWith('run-needs-review', decision)
   })
 
   it('shares one update subscription and 2-second poll, and removes both after the last consumer', async () => {
