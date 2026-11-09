@@ -357,6 +357,7 @@ export function HiveLauncher(): JSX.Element {
                 )}
                 {session.evidence && (
                   <HiveReviewCard
+                    runId={session.id}
                     evidence={session.evidence}
                     decision={session.decision}
                     secure={privacyMode}

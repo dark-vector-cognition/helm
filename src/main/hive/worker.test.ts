@@ -1,7 +1,7 @@
 import { execFileSync, fork, type ChildProcess } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { delimiter, join } from 'node:path'
 import ts from 'typescript'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 
@@ -36,8 +36,8 @@ afterEach(() => {
 
 afterAll(() => rmSync(root, { recursive: true, force: true }))
 
-function launch(command: string, args: string[], timeoutSeconds = 10, cwd = root) {
-  const child = fork(workerPath, [], { stdio: ['ignore', 'ignore', 'ignore', 'ipc'] })
+function launch(command: string, args: string[], timeoutSeconds = 10, cwd = root, env = process.env) {
+  const child = fork(workerPath, [], { stdio: ['ignore', 'ignore', 'ignore', 'ipc'], env })
   workers.push(child)
   const messages: Record<string, unknown>[] = []
   child.on('message', (message) => {
@@ -76,17 +76,38 @@ function fixtureRepo(): { cwd: string; git: (...args: string[]) => string } {
   return { cwd, git }
 }
 
+function slowGitEnv(): NodeJS.ProcessEnv {
+  const binaries = mkdtempSync(join(root, 'slow-git-'))
+  writeFileSync(join(binaries, 'git'), '#!/bin/sh\nexec /bin/sleep 5\n', { mode: 0o700 })
+  return { ...process.env, PATH: [binaries, process.env.PATH].filter(Boolean).join(delimiter) }
+}
+
 describe('supervisor worker with local processes', () => {
   it('captures the exact tracked patch and untracked names across the provider lifetime', async () => {
     const { cwd, git } = fixtureRepo()
     const baseCommit = git('rev-parse', 'HEAD').trim()
     git('config', 'diff.external', '/does-not-exist-fixture-external-diff')
+    git('config', 'filter.unused.clean', '/does-not-exist-fixture-clean-filter')
     const fixture = `const fs = require('node:fs'); fs.writeFileSync('tracked.txt', 'after\\n'); fs.writeFileSync('untracked.txt', 'untracked private contents\\n');`
     const { messages } = launch(process.execPath, ['-e', fixture], 10, cwd)
     const exit = await waitFor(() => messages.find((message) => message.type === 'exit'))
     expect(exit.git).toEqual({ status: 'captured', baseCommit,
       patch: git('diff', '--no-ext-diff', '--no-textconv', '--full-index', 'HEAD', '--'), untracked: ['untracked.txt'] })
     expect(JSON.stringify(exit)).not.toContain('untracked private contents')
+  })
+
+  it('withholds evidence without executing a clean filter activated on a tracked path during the run', async () => {
+    const { cwd, git } = fixtureRepo()
+    writeFileSync(join(cwd, '.gitattributes'), '# no active filters\n')
+    git('add', '.gitattributes')
+    git('commit', '-qm', 'Track attributes')
+    writeFileSync(join(cwd, '.git', 'filter-helper'), 'printf ran > .git/filter-ran\ncat\n')
+    git('config', 'filter.fixture.clean', '/bin/sh .git/filter-helper')
+    const fixture = `const fs = require('node:fs'); fs.writeFileSync('.gitattributes', 'tracked.txt filter=fixture\\n'); fs.writeFileSync('tracked.txt', 'after\\n');`
+    const { messages } = launch(process.execPath, ['-e', fixture], 10, cwd)
+    const exit = await waitFor(() => messages.find((message) => message.type === 'exit'))
+    expect(exit.git).toEqual({ status: 'unavailable', reason: 'A tracked path uses a configured Git clean or process filter.' })
+    expect(existsSync(join(cwd, '.git', 'filter-ran'))).toBe(false)
   })
 
   it('withholds evidence for a dirty base and still runs the provider', async () => {
@@ -167,6 +188,22 @@ describe('supervisor worker with local processes', () => {
     const { messages } = launch(process.execPath, ['-e', 'setInterval(()=>{},1000)'], 0.1)
     await waitFor(() => messages.find((message) => message.type === 'exit'))
     expect(messages.at(-1)).toMatchObject({ stopped: true, error: 'Run time limit reached' })
+  })
+
+  it('launches without Git evidence when the optional baseline reaches its short deadline', async () => {
+    const fixture = `console.log(JSON.stringify({type:'fixture-ran'}))`
+    const { messages } = launch(process.execPath, ['-e', fixture], 10, root, slowGitEnv())
+    const exit = await waitFor(() => messages.find((message) => message.type === 'exit'))
+    expect(exit).toMatchObject({ code: 0, git: { status: 'unavailable', reason: expect.stringContaining('launch deadline') } })
+    expect(messages).toContainEqual({ type: 'event', event: { type: 'fixture-ran' } })
+  })
+
+  it('starts the run timeout before Git sampling and does not launch a provider after it expires', async () => {
+    const fixture = `console.log(JSON.stringify({type:'fixture-ran'}))`
+    const { messages } = launch(process.execPath, ['-e', fixture], 0.1, root, slowGitEnv())
+    const exit = await waitFor(() => messages.find((message) => message.type === 'exit'))
+    expect(exit).toMatchObject({ stopped: true, error: 'Run time limit reached' })
+    expect(messages.some((message) => message.type === 'spawn' || message.type === 'event')).toBe(false)
   })
 
   it('stops excessive output instead of retaining unbounded text', async () => {

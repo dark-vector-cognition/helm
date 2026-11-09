@@ -1,12 +1,14 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import type {
   HiveReviewDecision,
   HiveReviewEvidence,
+  HiveReviewEvidenceSummary,
   HiveReviewRequest
 } from '../../../shared/types'
 
 interface HiveReviewCardProps {
-  evidence: HiveReviewEvidence
+  runId: string
+  evidence: HiveReviewEvidenceSummary
   decision?: HiveReviewDecision
   secure: boolean
   canReview: boolean
@@ -20,6 +22,7 @@ const CAPTURE_LABEL = {
 }
 
 export function HiveReviewCard({
+  runId,
   evidence,
   decision,
   secure,
@@ -30,13 +33,8 @@ export function HiveReviewCard({
   const [reason, setReason] = useState('')
   const [saving, setSaving] = useState(false)
   const [saveFailed, setSaveFailed] = useState(false)
-  const { git, commands } = evidence
-  const tests = commands.filter((command) => command.isTest)
-  const zero = tests.filter((command) => command.exitCode === 0).length
-  const nonzero = tests.filter(
-    (command) => command.exitCode !== null && command.exitCode !== 0
-  ).length
-  const unknown = tests.length - zero - nonzero
+  const { git, commandCount, testExits } = evidence
+  const { zero, nonzero, unknown } = testExits
 
   async function save(outcome: HiveReviewRequest['outcome']): Promise<void> {
     const trimmed = reason.trim()
@@ -84,8 +82,10 @@ export function HiveReviewCard({
                 Baseline <code className="break-all">{git.baseCommit}</code>
               </p>
               <p>
-                {git.patch ? 'Tracked diff captured' : 'No tracked changes in the captured patch'} ·{' '}
-                {git.untracked.length} new untracked
+                {git.hasPatch
+                  ? 'Tracked diff captured'
+                  : 'No tracked changes in the captured patch'}{' '}
+                · {git.untrackedCount} new untracked
               </p>
             </dd>
           ) : (
@@ -96,12 +96,12 @@ export function HiveReviewCard({
           <dt className="font-semibold">Provider-reported commands</dt>
           <dd className="shell-subtle">
             <p>
-              {evidence.commandCapture === 'captured' && commands.length === 0
+              {evidence.commandCapture === 'captured' && commandCount === 0
                 ? 'No completed command events reported'
-                : `${CAPTURE_LABEL[evidence.commandCapture]} · ${commands.length} recorded`}
+                : `${CAPTURE_LABEL[evidence.commandCapture]} · ${commandCount} recorded`}
             </p>
             <p>
-              {tests.length === 0
+              {zero + nonzero + unknown === 0
                 ? 'No test commands reported'
                 : `Test command exits · ${zero} zero · ${nonzero} nonzero · ${unknown} unknown`}
             </p>
@@ -119,47 +119,7 @@ export function HiveReviewCard({
           inspect them.
         </p>
       ) : (
-        <>
-          <p className="text-xs shell-subtle">
-            Secure View is off. These details may contain private source or command text.
-          </p>
-          {git.status === 'captured' ? (
-            <>
-              {git.patch && (
-                <details>
-                  <summary className="shell-run-disclosure">Inspect Git diff</summary>
-                  <pre className="shell-run-evidence-text">{git.patch}</pre>
-                </details>
-              )}
-              {git.untracked.length > 0 && (
-                <details>
-                  <summary className="shell-run-disclosure">Inspect untracked file names</summary>
-                  <pre className="shell-run-evidence-text">{git.untracked.join('\n')}</pre>
-                </details>
-              )}
-            </>
-          ) : (
-            <p className="break-words text-xs shell-subtle">{git.reason}</p>
-          )}
-          {commands.length > 0 && (
-            <details>
-              <summary className="shell-run-disclosure">Inspect recorded commands</summary>
-              <ol className="shell-run-evidence-text space-y-2">
-                {commands.map((command, index) => (
-                  <li key={index} className="min-w-0">
-                    <code>{command.command}</code>
-                    <p className="shell-subtle">
-                      {command.isTest ? 'Test command · ' : ''}
-                      {command.exitCode === null
-                        ? 'Exit status unknown'
-                        : `Exit ${command.exitCode}`}
-                    </p>
-                  </li>
-                ))}
-              </ol>
-            </details>
-          )}
-        </>
+        <RawEvidence key={evidence.id} runId={runId} evidence={evidence} />
       )}
       {decision && (
         <div role="status" className="border-t border-[color:var(--helm-border-soft)] pt-3 text-xs">
@@ -246,5 +206,126 @@ export function HiveReviewCard({
         </div>
       )}
     </section>
+  )
+}
+
+type RawEvidenceState =
+  | { status: 'idle' | 'loading' | 'failed' }
+  | { status: 'loaded'; value: HiveReviewEvidence }
+
+function RawEvidence({
+  runId,
+  evidence
+}: Pick<HiveReviewCardProps, 'runId' | 'evidence'>): JSX.Element {
+  const [state, setState] = useState<RawEvidenceState>({ status: 'idle' })
+  const [open, setOpen] = useState<Record<string, boolean>>({})
+  const requested = useRef(false)
+  const mounted = useRef(false)
+  const { id, git, commandCount } = evidence
+
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
+
+  async function load(): Promise<void> {
+    if (requested.current) return
+    requested.current = true
+    setState({ status: 'loading' })
+
+    try {
+      const value = await window.helm.hiveReadReviewEvidence(runId, id)
+      if (!mounted.current) return
+      if (value?.id === id) {
+        setState({ status: 'loaded', value })
+        return
+      }
+    } catch {
+      if (!mounted.current) return
+    }
+
+    requested.current = false
+    setState({ status: 'failed' })
+  }
+
+  const raw = state.status === 'loaded' ? state.value : undefined
+  const rawGit = raw?.git.status === 'captured' ? raw.git : undefined
+  const sections = [
+    {
+      label: 'Inspect Git diff',
+      available: git.status === 'captured' && git.hasPatch,
+      content: rawGit && <pre className="shell-run-evidence-text">{rawGit.patch}</pre>
+    },
+    {
+      label: 'Inspect untracked file names',
+      available: git.status === 'captured' && git.untrackedCount > 0,
+      content: rawGit && (
+        <pre className="shell-run-evidence-text">{rawGit.untracked.join('\n')}</pre>
+      )
+    },
+    {
+      label: 'Inspect recorded commands',
+      available: commandCount > 0,
+      content: raw && (
+        <ol className="shell-run-evidence-text space-y-2">
+          {raw.commands.map((command, index) => (
+            <li key={index} className="min-w-0">
+              <code>{command.command}</code>
+              <p className="shell-subtle">
+                {command.isTest ? 'Test command · ' : ''}
+                {command.exitCode === null ? 'Exit status unknown' : `Exit ${command.exitCode}`}
+              </p>
+            </li>
+          ))}
+        </ol>
+      )
+    }
+  ]
+
+  return (
+    <>
+      <p className="text-xs shell-subtle">
+        Secure View is off. These details may contain private source or command text.
+      </p>
+      {git.status === 'unavailable' && (
+        <p className="break-words text-xs shell-subtle">{git.reason}</p>
+      )}
+      {sections
+        .filter((section) => section.available)
+        .map(({ label, content }) => (
+          <details
+            key={label}
+            onToggle={(event) => {
+              const expanded = event.currentTarget.open
+              setOpen((current) => ({ ...current, [label]: expanded }))
+              if (expanded) void load()
+            }}
+          >
+            <summary className="shell-run-disclosure">{label}</summary>
+            {open[label] && (
+              <>
+                {state.status === 'loading' && (
+                  <p role="status" className="mt-2 text-xs shell-subtle">
+                    Loading evidence…
+                  </p>
+                )}
+                {state.status === 'failed' && (
+                  <div className="mt-2 space-y-2">
+                    <p role="alert" className="text-xs text-red-300">
+                      Could not load this evidence.
+                    </p>
+                    <button type="button" className="shell-run-action" onClick={() => void load()}>
+                      Retry evidence
+                    </button>
+                  </div>
+                )}
+                {state.status === 'loaded' && content}
+              </>
+            )}
+          </details>
+        ))}
+    </>
   )
 }

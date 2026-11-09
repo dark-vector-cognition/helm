@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import type { HiveReviewEvidence, HiveSessionInfo, HiveTaskState } from '../../../shared/types'
+import type {
+  HiveReviewEvidenceSummary,
+  HiveSessionSummary,
+  HiveTaskState
+} from '../../../shared/types'
 
 const view = vi.hoisted(() => ({ privacyMode: true }))
 
@@ -27,7 +31,7 @@ vi.mock('./hive', async () => {
 import { useHiveStore } from './hive'
 import { HiveLauncher } from '../panels/HiveLauncher'
 
-const session = (taskState?: HiveTaskState): HiveSessionInfo => ({
+const session = (taskState?: HiveTaskState): HiveSessionSummary => ({
   id: `run-${taskState ?? 'legacy'}`,
   role: 'analyst',
   model: 'sonnet',
@@ -58,6 +62,7 @@ let api: {
   hiveSpawn: ReturnType<typeof vi.fn>
   hiveRetry: ReturnType<typeof vi.fn>
   hiveReview: ReturnType<typeof vi.fn>
+  hiveReadReviewEvidence: ReturnType<typeof vi.fn>
   hiveKillSession: ReturnType<typeof vi.fn>
 }
 
@@ -71,6 +76,7 @@ beforeEach(() => {
     hiveSpawn: vi.fn().mockResolvedValue({ success: true }),
     hiveRetry: vi.fn().mockResolvedValue({ success: true }),
     hiveReview: vi.fn().mockResolvedValue({ success: true }),
+    hiveReadReviewEvidence: vi.fn().mockResolvedValue(undefined),
     hiveKillSession: vi.fn().mockResolvedValue({ success: true })
   }
   vi.stubGlobal('window', { helm: api })
@@ -157,22 +163,18 @@ describe('managed agent launcher', () => {
     expect(html).not.toContain('Result at')
   })
 
-  it('shows review evidence and actual pending counts without exposing raw material in Secure View', () => {
-    const evidence: HiveReviewEvidence = {
+  it('shows review summaries and opens raw evidence only on demand with Secure View off', () => {
+    const evidence: HiveReviewEvidenceSummary = {
       id: 'fixture-receipt',
       git: {
         status: 'captured',
         baseCommit: 'a'.repeat(40),
-        patch: 'diff --git a/example.txt b/example.txt\n+fixture patch line',
-        untracked: ['fixture-local-file.txt']
+        hasPatch: true,
+        untrackedCount: 1
       },
       commandCapture: 'partial',
-      commands: [
-        { command: 'npm test -- fixture-one', exitCode: 0, isTest: true },
-        { command: 'npm test -- fixture-two', exitCode: 1, isTest: true },
-        { command: 'npm test -- fixture-three', exitCode: null, isTest: true },
-        { command: 'git status', exitCode: 0, isTest: false }
-      ]
+      commandCount: 4,
+      testExits: { zero: 1, nonzero: 1, unknown: 1 }
     }
     useHiveStore.setState({
       sessions: [
@@ -199,25 +201,27 @@ describe('managed agent launcher', () => {
     expect(secure).toContain('Request follow-up')
     expect(secure).not.toContain('Mark reviewed')
     expect(secure).not.toContain('/var/folders')
-    expect(secure).not.toContain('fixture patch line')
-    expect(secure).not.toContain('fixture-local-file.txt')
+    expect(secure).not.toContain('Inspect Git diff')
+    expect(secure).not.toContain('Inspect untracked file names')
+    expect(secure).not.toContain('Inspect recorded commands')
     expect(secure).not.toContain('npm test -- fixture-one')
 
     view.privacyMode = false
     const unmasked = render()
     expect(unmasked).toContain('Inspect Git diff')
-    expect(unmasked).toContain('fixture patch line')
-    expect(unmasked).toContain('fixture-local-file.txt')
-    expect(unmasked).toContain('npm test -- fixture-one')
-    expect(unmasked).toContain('Exit status unknown')
+    expect(unmasked).toContain('Inspect untracked file names')
+    expect(unmasked).toContain('Inspect recorded commands')
+    expect(unmasked).not.toContain('Exit status unknown')
+    expect(api.hiveReadReviewEvidence).not.toHaveBeenCalled()
   })
 
   it('keeps unavailable evidence explicit and displays a recorded disposition', () => {
-    const evidence: HiveReviewEvidence = {
+    const evidence: HiveReviewEvidenceSummary = {
       id: 'fixture-receipt',
       git: { status: 'unavailable', reason: 'Fixture Git baseline unavailable' },
       commandCapture: 'unavailable',
-      commands: []
+      commandCount: 0,
+      testExits: { zero: 0, nonzero: 0, unknown: 0 }
     }
     useHiveStore.setState({
       sessions: [

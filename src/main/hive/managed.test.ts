@@ -137,6 +137,43 @@ describe('managed agent lifecycle', () => {
     expect(mockFork).toHaveBeenCalledTimes(1)
   })
 
+  it('projects evidence without cloning raw data and returns a detached capture only for matching IDs', () => {
+    const hive = new ManagedHive(directory, '/worker.js')
+    const { id, worker } = start(hive)
+    expect(hive.listSummaries()[0].evidence).toBeUndefined()
+    for (const [index, command, exitCode] of [
+      [1, 'npm test', 0], [2, 'npm run test:unit', 2], [3, 'pytest', null], [4, 'git status', 0]
+    ]) {
+      event(worker, { type: 'item.completed', item: { id: `cmd-${index}`, type: 'command_execution', command, exit_code: exitCode } })
+    }
+    event(worker, { type: 'item.completed', item: { type: 'agent_message', text: 'Result' } })
+    event(worker, { type: 'turn.completed', usage: {} })
+    const git = { status: 'captured', baseCommit: 'a'.repeat(40), patch: '+raw patch', untracked: ['raw filename'] }
+    worker.emit('message', { type: 'exit', code: 0, git })
+    const full = hive.list()[0].evidence!
+
+    const clone = vi.spyOn(globalThis, 'structuredClone')
+    try {
+      const [summary] = hive.listSummaries()
+      expect(summary.evidence).toEqual({
+        id: full.id, commandCapture: 'partial', commandCount: 4,
+        testExits: { zero: 1, nonzero: 1, unknown: 1 },
+        git: { status: 'captured', baseCommit: git.baseCommit, hasPatch: true, untrackedCount: 1 }
+      })
+      expect(clone).toHaveBeenCalledTimes(1)
+      expect(JSON.stringify(clone.mock.calls[0])).not.toMatch(/raw patch|raw filename|npm test|git status/)
+      summary.events![0].message = 'changed copy'
+      expect(hive.reviewEvidence(id, 'stale')).toBeUndefined()
+      expect(hive.reviewEvidence('other-run', full.id)).toBeUndefined()
+      const capture = hive.reviewEvidence(id, full.id)!
+      expect(capture).toEqual(full)
+      capture.commands[0].command = 'changed copy'
+      if (capture.git.status === 'captured') capture.git.untracked.push('changed copy')
+      expect(hive.reviewEvidence(id, full.id)).toEqual(full)
+      expect(hive.listSummaries()[0].events![0].message).not.toBe('changed copy')
+    } finally { clone.mockRestore() }
+  })
+
   it('withholds a captured patch if the JSON record would exceed its recovery limit', () => {
     const hive = new ManagedHive(directory, '/worker.js')
     const { id, worker } = start(hive, { objective: '\x01'.repeat(16_000) })

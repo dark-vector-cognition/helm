@@ -8,6 +8,24 @@ let stopped = false
 let reason = 'Stopped by operator'
 let timeout: ReturnType<typeof setTimeout> | undefined
 let escalation: ReturnType<typeof setTimeout> | undefined
+let baseline: AbortController | undefined
+
+async function readBase(cwd: string): ReturnType<typeof sampleGitBase> {
+  const controller = new AbortController()
+  baseline = controller
+  const deadline = setTimeout(() => controller.abort(), 1250)
+  try {
+    const fallback = new Promise<Awaited<ReturnType<typeof sampleGitBase>>>((resolve) => {
+      controller.signal.addEventListener('abort', () => resolve({
+        status: 'unavailable', reason: 'HELM did not obtain a Git baseline within the launch deadline.'
+      }), { once: true })
+    })
+    return await Promise.race([sampleGitBase(cwd, controller.signal), fallback])
+  } finally {
+    clearTimeout(deadline)
+    baseline = undefined
+  }
+}
 
 function signalTree(signal: NodeJS.Signals): void {
   if (!child?.pid) return
@@ -18,6 +36,7 @@ function stop(message: string): void {
   if (stopped) return
   stopped = true
   reason = message
+  baseline?.abort()
   if (child) {
     signalTree('SIGTERM')
     escalation = setTimeout(() => signalTree('SIGKILL'), 2000)
@@ -38,8 +57,13 @@ process.on('message', async (message) => {
     process.exit(1)
   }
   starting = true
-  const base = await sampleGitBase(request.cwd)
+  const duration = request.timeoutSeconds * 1000
+  const expiresAt = Date.now() + duration
+  timeout = setTimeout(() => stop('Run time limit reached'), duration)
+  const base = await readBase(request.cwd)
+  if (Date.now() >= expiresAt) stop('Run time limit reached')
   if (stopped) {
+    clearTimeout(timeout)
     send({ type: 'exit', code: null, stopped, error: reason })
     if (process.connected) process.disconnect()
     return
@@ -82,5 +106,4 @@ process.on('message', async (message) => {
     if (process.connected) process.disconnect()
     process.exitCode = 0
   })
-  timeout = setTimeout(() => stop('Run time limit reached'), request.timeoutSeconds * 1000)
 })

@@ -1,8 +1,8 @@
 import { create } from 'zustand'
-import type { HiveReviewRequest, HiveSessionInfo, HiveSpawnRequest, HiveSpawnResult } from '../../../shared/types'
+import type { HiveReviewRequest, HiveSessionSummary, HiveSpawnRequest, HiveSpawnResult } from '../../../shared/types'
 
 interface HiveStore {
-  sessions: HiveSessionInfo[]
+  sessions: HiveSessionSummary[]
   enabled: boolean
   disabledReason: string | null
   loading: boolean

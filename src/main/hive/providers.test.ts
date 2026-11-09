@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { resemblesCredential } from './evidence-safety'
 import { buildProviderCommand, parseProviderEvent } from './providers'
 import type { HiveProvider, HiveSpawnRequest } from '../../shared/types'
 
@@ -114,6 +115,11 @@ describe('provider event parsing', () => {
     expect(completed('curl -u fixture:private https://example.invalid')?.command).toBeNull()
     expect(completed('curl -H "Cookie: private" https://example.invalid')?.command).toBeNull()
     expect(JSON.stringify(completed(test))).not.toContain('private test output')
+  })
+
+  it('recognizes URL credentials without treating a colon-heavy noncredential string as userinfo', () => {
+    expect(resemblesCredential('https://user:fixture:password@example.invalid/path')).toBe(true)
+    expect(resemblesCredential(`https://fixture${':'.repeat(24_000)}no-at-sign`)).toBe(false)
   })
 
   it('bounds results and errors and removes terminal escapes', () => {

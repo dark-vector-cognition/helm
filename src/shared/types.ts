@@ -92,6 +92,16 @@ export interface HiveReviewEvidence {
   commands: HiveCommandEvidence[]
 }
 
+export interface HiveReviewEvidenceSummary {
+  id: string
+  git:
+    | { status: 'captured'; baseCommit: string; hasPatch: boolean; untrackedCount: number }
+    | { status: 'unavailable'; reason: string }
+  commandCapture: HiveReviewEvidence['commandCapture']
+  commandCount: number
+  testExits: { zero: number; nonzero: number; unknown: number }
+}
+
 export interface HiveReviewRequest {
   evidenceId: string
   outcome: 'accepted' | 'follow-up-requested'
@@ -136,6 +146,9 @@ export interface HiveSessionInfo {
   decision?: HiveReviewDecision
 }
 
+export type HiveSessionSummary = Omit<HiveSessionInfo, 'evidence'> & {
+  evidence?: HiveReviewEvidenceSummary
+}
 
 export interface HiveSpawnRequest {
   provider?: HiveProvider
@@ -476,6 +489,7 @@ export const IPC_CHANNELS = {
   HIVE_SESSION_UPDATE: 'hive:session-update',
   HIVE_RETRY: 'hive:retry',
   HIVE_REVIEW: 'hive:review',
+  HIVE_READ_REVIEW_EVIDENCE: 'hive:read-review-evidence',
   HIVE_LAUNCH_STATE: 'hive:launch-state'
 } as const
 

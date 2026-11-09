@@ -4,7 +4,7 @@ import { lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSy
 import { isAbsolute, join, sep } from 'path'
 import type {
   AgentInfo, HiveCommandEvidence, HiveProvider, HiveReviewEvidence, HiveReviewRequest,
-  HiveSessionInfo, HiveSpawnRequest, HiveSpawnResult, HiveTaskState
+  HiveSessionInfo, HiveSessionSummary, HiveSpawnRequest, HiveSpawnResult, HiveTaskState
 } from '../../shared/types'
 import { COMMAND_LENGTH_LIMIT, COMMAND_LIMIT } from './evidence-safety'
 import { buildProviderCommand, parseProviderEvent } from './providers'
@@ -110,6 +110,40 @@ export class ManagedHive {
 
   list(): HiveSessionInfo[] {
     return structuredClone([...this.runs.values()].sort((a, b) => b.startedAt - a.startedAt))
+  }
+
+  listSummaries(): HiveSessionSummary[] {
+    const summaries: HiveSessionSummary[] = [...this.runs.values()]
+      .sort((a, b) => b.startedAt - a.startedAt)
+      .map(({ evidence, ...run }) => {
+        if (!evidence) return run
+        const { git, commands } = evidence
+        const testExits = { zero: 0, nonzero: 0, unknown: 0 }
+        for (const command of commands) {
+          if (!command.isTest) continue
+          if (command.exitCode === null) testExits.unknown++
+          else if (command.exitCode === 0) testExits.zero++
+          else testExits.nonzero++
+        }
+        return {
+          ...run,
+          evidence: {
+            id: evidence.id,
+            commandCapture: evidence.commandCapture,
+            commandCount: commands.length,
+            testExits,
+            git: git.status === 'captured'
+              ? { status: git.status, baseCommit: git.baseCommit, hasPatch: !!git.patch, untrackedCount: git.untracked.length }
+              : { status: git.status, reason: git.reason }
+          }
+        }
+      })
+    return structuredClone(summaries)
+  }
+
+  reviewEvidence(runId: string, evidenceId: string): HiveReviewEvidence | undefined {
+    const evidence = this.runs.get(runId)?.evidence
+    return evidence && evidence.id === evidenceId ? structuredClone(evidence) : undefined
   }
 
   agents(): AgentInfo[] {
