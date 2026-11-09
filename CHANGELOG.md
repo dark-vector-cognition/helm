@@ -2,6 +2,11 @@
 
 Entries are ordered newest first. `Unreleased` covers mainline work after the latest tagged release, and tagged dates are written in America/Chicago local time.
 
+## Unreleased (v6.1.0)
+
+- **Listening Ports.** Grid opens a grouped list that separates listeners bound beyond this Mac from listeners bound only to this Mac. Each row shows observed LAN and internet connection counts. Missing counts show as unavailable.
+- **Optional 3D map.** Use the map to explore the same listeners. Port details include bind scope and firewall name matches. Secure View hides bind addresses.
+
 ## v6.0.0 - 2026-10-21
 
 HELM V6: supervised agent runs, the Signal interface and a signed Mac download. Download it from the [v6.0.0 release](https://github.com/dark-vector-cognition/helm/releases/tag/v6.0.0).

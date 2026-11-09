@@ -5,7 +5,10 @@ directories:
 files:
   - '!**/.vscode/*'
   - '!src/*'
+  - '!out/*-review{,/**}'
+  - '!out/*-proof{,/**}'
   - '!electron.vite.config.{js,ts,mjs,cjs}'
+  - '!vite.stage.config.ts'
   - '!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
@@ -13,6 +16,8 @@ asar: true
 asarUnpack:
   - resources/**
 extraResources:
+  - from: node_modules/playcanvas/LICENSE
+    to: licenses/playcanvas-LICENSE
   - from: src/main/data
     to: app-resources/data
   - from: src/main/hive/roles
