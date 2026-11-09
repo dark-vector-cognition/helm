@@ -2,7 +2,12 @@
 
 Entries are ordered newest first. `Unreleased` covers mainline work after the latest tagged release, and tagged dates are written in America/Chicago local time.
 
-## Unreleased (v6.1.0)
+## Unreleased (v6.2.0)
+
+- **Agent run review card.** Inspect a completed run's captured Git diff, recorded commands, and reported test exit codes when available. Choose **Accept** or **Request follow-up** to record your decision.
+- **Evidence display.** The card loads raw details when opened. Secure View hides them on screen.
+
+## v6.1.0 - 2026-11-09
 
 - **Listening Ports.** Grid opens a grouped list that separates listeners bound beyond this Mac from listeners bound only to this Mac. Each row shows observed LAN and internet connection counts. Missing counts show as unavailable.
 - **Optional 3D map.** Use the map to explore the same listeners. Port details include bind scope and firewall name matches. Secure View hides bind addresses.
