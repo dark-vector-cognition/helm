@@ -101,6 +101,21 @@ describe('provider event parsing', () => {
     expect(parseProviderEvent('codex', { type: 'item.started', item: { type: 'command_execution', command: 'private command' } })).toEqual({ accepted: true, activity: 'Agent working' })
   })
 
+  it('uses structured completion and a simple test invocation without storing output or secrets', () => {
+    const completed = (command: string, exitCode: unknown = 1) => parseProviderEvent('codex', {
+      type: 'item.completed', item: { id: 'item_0', type: 'command_execution', command, exit_code: exitCode, aggregated_output: 'private test output' }
+    })
+    const test = "/bin/zsh -lc 'python3 -B -m unittest -v'"
+    expect(completed(test)?.command).toEqual({ id: 'item_0', value: { command: test, exitCode: 1, isTest: true } })
+    expect(completed('npm test || true', 0)?.command?.value.isTest).toBe(false)
+    expect(completed('vitest list', 0)?.command?.value.isTest).toBe(false)
+    expect(completed('pytest --collect-only', 0)?.command?.value.isTest).toBe(false)
+    expect(completed('npm test', '0')?.command?.value.exitCode).toBeNull()
+    expect(completed('curl -u fixture:private https://example.invalid')?.command).toBeNull()
+    expect(completed('curl -H "Cookie: private" https://example.invalid')?.command).toBeNull()
+    expect(JSON.stringify(completed(test))).not.toContain('private test output')
+  })
+
   it('bounds results and errors and removes terminal escapes', () => {
     expect(parseProviderEvent('claude-code', { type: 'result', subtype: 'success', is_error: false, result: '\u001b[31mresult\u001b[0m' })?.result).toBe('result')
     expect(parseProviderEvent('codex', { type: 'item.completed', item: { type: 'agent_message', text: 'x'.repeat(100_000) } })?.result).toHaveLength(32_768)

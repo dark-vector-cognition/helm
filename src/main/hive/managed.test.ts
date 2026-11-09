@@ -96,12 +96,79 @@ describe('managed agent lifecycle', () => {
     worker.emit('message', { type: 'exit', code: 0 })
     worker.emit('exit', 0)
     expect(hive.list()[0]).toMatchObject({ taskState: 'needs-review', result: 'sample.txt verified' })
-    expect(hive.review(id).success).toBe(true)
+    expect(hive.review(id).success).toBe(false)
+    const evidenceId = hive.list()[0].evidence!.id
+    expect(hive.review(id, { evidenceId: 'stale', outcome: 'accepted' }).success).toBe(false)
+    expect(hive.review(id, { evidenceId, outcome: 'follow-up-requested' }).success).toBe(false)
+    expect(hive.review(id, { evidenceId, outcome: 'accepted' }).success).toBe(true)
     expect(hive.list()[0].taskState).toBe('reviewed')
     expect(updates).toHaveBeenCalled()
     expect(lstatSync(directory).mode & 0o077).toBe(0)
     expect(lstatSync(join(directory, `${id}.json`)).mode & 0o077).toBe(0)
     expect(JSON.parse(readFileSync(join(directory, `${id}.json`), 'utf8')).taskState).toBe('reviewed')
+  })
+
+  it('retains bounded structured commands, commits a follow-up decision atomically, and restores it without another launch', () => {
+    const hive = new ManagedHive(directory, '/worker.js')
+    const { id, worker } = start(hive)
+    event(worker, { type: 'item.completed', item: { id: 'cmd-1', type: 'command_execution', command: 'python3 -B -m unittest -v', exit_code: 2, aggregated_output: 'private output' } })
+    event(worker, { type: 'item.completed', item: { id: 'cmd-2', type: 'command_execution', command: 'git status', exit_code: 0 } })
+    complete(worker)
+    const pending = hive.list()[0]
+    expect(pending.evidence).toMatchObject({ commandCapture: 'captured', commands: [
+      { command: 'python3 -B -m unittest -v', exitCode: 2, isTest: true },
+      { command: 'git status', exitCode: 0, isTest: false }
+    ] })
+    const path = join(directory, `${id}.json`)
+    const before = readFileSync(path, 'utf8')
+    expect(before).not.toContain('private output')
+    const decision = { evidenceId: pending.evidence!.id, outcome: 'follow-up-requested' as const, reason: '  Explain the exit code.  ' }
+    chmodSync(directory, 0o755)
+    expect(hive.review(id, decision).success).toBe(false)
+    expect(hive.list()[0]).toEqual(pending)
+    expect(readFileSync(path, 'utf8')).toBe(before)
+    chmodSync(directory, 0o700)
+    expect(hive.review(id, decision).success).toBe(true)
+    expect(hive.review(id, decision).success).toBe(false)
+    expect(new ManagedHive(directory, '/worker.js').list()[0]).toMatchObject({
+      taskState: 'reviewed', evidence: pending.evidence,
+      decision: { ...decision, reason: 'Explain the exit code.', at: expect.any(Number) }
+    })
+    expect(mockFork).toHaveBeenCalledTimes(1)
+  })
+
+  it('withholds a captured patch if the JSON record would exceed its recovery limit', () => {
+    const hive = new ManagedHive(directory, '/worker.js')
+    const { id, worker } = start(hive, { objective: '\x01'.repeat(16_000) })
+    event(worker, { type: 'item.completed', item: { type: 'agent_message', text: '"'.repeat(32_000) } })
+    event(worker, { type: 'turn.completed', usage: {} })
+    worker.emit('message', { type: 'exit', code: 0, git: {
+      status: 'captured', baseCommit: 'a'.repeat(40), patch: '+'.repeat(24 * 1024), untracked: []
+    } })
+    const pending = hive.list()[0]
+    expect(pending).toMatchObject({ taskState: 'needs-review', evidence: { git: { status: 'unavailable', reason: expect.stringContaining('size limit') } } })
+    expect(lstatSync(join(directory, `${id}.json`)).size).toBeLessThan(128 * 1024)
+    expect(hive.review(id, { evidenceId: pending.evidence!.id, outcome: 'follow-up-requested', reason: '"'.repeat(500) }).success).toBe(true)
+    expect(new ManagedHive(directory, '/worker.js').list()[0].taskState).toBe('reviewed')
+  })
+
+  it.each(['same directory', 'parent first', 'nested first'])('withholds Git evidence for overlapping runs (%s)', (order) => {
+    const hive = new ManagedHive(directory, '/worker.js')
+    const nested = join(workspace, 'nested')
+    mkdirSync(nested)
+    const first = start(hive, { workingDir: order === 'nested first' ? nested : workspace })
+    const second = start(hive, { workingDir: order === 'parent first' ? nested : workspace })
+    for (const { worker } of [first, second]) {
+      event(worker, { type: 'item.completed', item: { type: 'agent_message', text: 'Result' } })
+      event(worker, { type: 'turn.completed', usage: {} })
+      worker.emit('message', { type: 'exit', code: 0, git: {
+        status: 'captured', baseCommit: 'a'.repeat(40), patch: '', untracked: []
+      } })
+      worker.emit('exit', 0)
+    }
+    expect(hive.list().map((run) => run.evidence?.git)).toEqual(Array.from({ length: 2 }, () => ({
+      status: 'unavailable', reason: expect.stringContaining('Multiple managed runs')
+    })))
   })
 
   it.each(['no-result', 'nonzero', 'provider-error'] as const)('fails closed for %s', (failure) => {

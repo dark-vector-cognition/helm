@@ -11,6 +11,7 @@ const HTTP_URL_RE = /\bhttps?:\/\/[^\s)]+/gi
 const FILE_URL_RE = /\bfile:\/\/[^\s)]+/gi
 const HOME_DIR_RE = /\/Users\/[^/\s]+/g
 const WINDOWS_HOME_RE = /[A-Za-z]:\\Users\\[^\\\s]+/g
+const MAC_TEMP_PATH_RE = /(?:\/private)?\/var\/folders\/[^\r\n"'<>]*/g
 const IPV4_RE = /\b(?:\d{1,3}\.){3}\d{1,3}\b/g
 const LOOPBACK_HOST_RE = /\b(?:localhost|127\.0\.0\.1|0\.0\.0\.0)\b/gi
 const LOCAL_NODE_RE = /\b[a-z0-9-]+\.local\b/gi
@@ -42,6 +43,7 @@ export function maskEndpoint(value: string): string {
       .replace(FILE_URL_RE, 'file://private-library/hidden-track')
       .replace(HOME_DIR_RE, '/Users/operator')
       .replace(WINDOWS_HOME_RE, 'C:\\Users\\operator')
+      .replace(MAC_TEMP_PATH_RE, '[private temporary path]')
       .replace(IPV4_RE, 'xx.xx.xx.xx')
       .replace(LOOPBACK_HOST_RE, 'secure-core.local')
       .replace(LOCAL_NODE_RE, 'private-node.local')
@@ -54,6 +56,7 @@ export function redactSensitiveText(value: string): string {
     .replace(HTTP_URL_RE, (match) => maskEndpoint(match))
     .replace(HOME_DIR_RE, '/Users/operator')
     .replace(WINDOWS_HOME_RE, 'C:\\Users\\operator')
+    .replace(MAC_TEMP_PATH_RE, '[private temporary path]')
     .replace(IPV4_RE, 'xx.xx.xx.xx')
     .replace(LOOPBACK_HOST_RE, 'secure-core.local')
     .replace(LOCAL_NODE_RE, 'private-node.local')

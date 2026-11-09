@@ -4,6 +4,7 @@ import { homedir } from 'os'
 import { IPC_CHANNELS } from '../../shared/types'
 import type {
   HiveConfig,
+  HiveReviewRequest,
   HiveRoleTemplate,
   HiveSpawnRequest,
   HiveSessionInfo
@@ -99,7 +100,8 @@ export function setupHiveIPC(mainWindow: BrowserWindow, hiveConfig: HiveConfig):
     if (!hiveConfig.enabled) return { success: false, error: 'HIVE is disabled' }
     return managed?.retry(id) ?? { success: false, error: managedError }
   })
-  ipcMain.handle(IPC_CHANNELS.HIVE_REVIEW, (_event, id: string) => managed?.review(id) ?? { success: false, error: managedError })
+  ipcMain.handle(IPC_CHANNELS.HIVE_REVIEW, (_event, id: string, decision?: HiveReviewRequest) =>
+    managed?.review(id, decision) ?? { success: false, error: managedError })
   ipcMain.handle(IPC_CHANNELS.HIVE_SPAWN, async (_event, request: HiveSpawnRequest) => {
     if (!hiveConfig.enabled) return { success: false, error: 'HIVE is disabled' }
     if (request?.provider) return managed?.launch(request) ?? { success: false, error: managedError }

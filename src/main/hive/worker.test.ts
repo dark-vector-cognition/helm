@@ -1,5 +1,5 @@
-import { fork, type ChildProcess } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { execFileSync, fork, type ChildProcess } from 'node:child_process'
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import ts from 'typescript'
@@ -11,12 +11,17 @@ const workers: ChildProcess[] = []
 const providerGroups = new Set<number>()
 
 beforeAll(() => {
-  root = mkdtempSync(join(tmpdir(), 'helm-worker-test-'))
-  workerPath = join(root, 'worker.cjs')
-  const source = readFileSync(new URL('./worker.ts', import.meta.url), 'utf8')
-  writeFileSync(workerPath, ts.transpileModule(source, {
-    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS }
-  }).outputText)
+  root = realpathSync(mkdtempSync(join(tmpdir(), 'helm-worker-test-')))
+  mkdirSync(join(root, 'hive'))
+  workerPath = join(root, 'hive', 'worker.js')
+  for (const [source, target] of [
+    ['./worker.ts', 'hive/worker.js'], ['./git-evidence.ts', 'hive/git-evidence.js'],
+    ['./evidence-safety.ts', 'hive/evidence-safety.js'], ['../git-binary.ts', 'git-binary.js']
+  ]) {
+    writeFileSync(join(root, target), ts.transpileModule(readFileSync(new URL(source, import.meta.url), 'utf8'), {
+      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: true }
+    }).outputText)
+  }
 })
 
 afterEach(() => {
@@ -31,7 +36,7 @@ afterEach(() => {
 
 afterAll(() => rmSync(root, { recursive: true, force: true }))
 
-function launch(command: string, args: string[], timeoutSeconds = 10) {
+function launch(command: string, args: string[], timeoutSeconds = 10, cwd = root) {
   const child = fork(workerPath, [], { stdio: ['ignore', 'ignore', 'ignore', 'ipc'] })
   workers.push(child)
   const messages: Record<string, unknown>[] = []
@@ -40,7 +45,7 @@ function launch(command: string, args: string[], timeoutSeconds = 10) {
     messages.push(record)
     if (record.type === 'spawn') providerGroups.add(record.pid as number)
   })
-  child.send({ type: 'start', command, args, cwd: root, input: 'clean fixture objective', timeoutSeconds })
+  child.send({ type: 'start', command, args, cwd, input: 'clean fixture objective', timeoutSeconds })
   return { child, messages }
 }
 
@@ -58,7 +63,59 @@ function alive(pid: number): boolean {
   try { process.kill(pid, 0); return true } catch { return false }
 }
 
+function fixtureRepo(): { cwd: string; git: (...args: string[]) => string } {
+  const cwd = mkdtempSync(join(root, 'git-'))
+  const git = (...args: string[]): string => execFileSync('git', [
+    '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',
+    '-c', 'core.hooksPath=/dev/null', '-c', 'commit.gpgsign=false', ...args
+  ], { cwd, encoding: 'utf8', env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' } })
+  git('init', '-q', '--template=')
+  writeFileSync(join(cwd, 'tracked.txt'), 'before\n')
+  git('add', 'tracked.txt')
+  git('commit', '-qm', 'Fixture base')
+  return { cwd, git }
+}
+
 describe('supervisor worker with local processes', () => {
+  it('captures the exact tracked patch and untracked names across the provider lifetime', async () => {
+    const { cwd, git } = fixtureRepo()
+    const baseCommit = git('rev-parse', 'HEAD').trim()
+    git('config', 'diff.external', '/does-not-exist-fixture-external-diff')
+    const fixture = `const fs = require('node:fs'); fs.writeFileSync('tracked.txt', 'after\\n'); fs.writeFileSync('untracked.txt', 'untracked private contents\\n');`
+    const { messages } = launch(process.execPath, ['-e', fixture], 10, cwd)
+    const exit = await waitFor(() => messages.find((message) => message.type === 'exit'))
+    expect(exit.git).toEqual({ status: 'captured', baseCommit,
+      patch: git('diff', '--no-ext-diff', '--no-textconv', '--full-index', 'HEAD', '--'), untracked: ['untracked.txt'] })
+    expect(JSON.stringify(exit)).not.toContain('untracked private contents')
+  })
+
+  it('withholds evidence for a dirty base and still runs the provider', async () => {
+    const { cwd } = fixtureRepo()
+    writeFileSync(join(cwd, 'tracked.txt'), 'already dirty\n')
+    const fixture = `console.log(JSON.stringify({type:'fixture-ran'}))`
+    const { messages } = launch(process.execPath, ['-e', fixture], 10, cwd)
+    const exit = await waitFor(() => messages.find((message) => message.type === 'exit'))
+    expect(exit).toMatchObject({ code: 0, git: { status: 'unavailable', reason: expect.stringContaining('before launch') } })
+    expect(messages).toContainEqual({ type: 'event', event: { type: 'fixture-ran' } })
+  })
+
+  it('withholds potentially sensitive evidence instead of substituting a redacted patch', async () => {
+    const { cwd } = fixtureRepo()
+    const fixture = `require('node:fs').writeFileSync('tracked.txt', 'password=local-fixture-value\\n')`
+    const { messages } = launch(process.execPath, ['-e', fixture], 10, cwd)
+    const exit = await waitFor(() => messages.find((message) => message.type === 'exit'))
+    expect(exit.git).toMatchObject({ status: 'unavailable', reason: expect.stringContaining('credential') })
+    expect(JSON.stringify(exit)).not.toContain('local-fixture-value')
+  })
+
+  it('withholds an oversized patch instead of presenting truncated evidence', async () => {
+    const { cwd } = fixtureRepo()
+    const fixture = `require('node:fs').writeFileSync('tracked.txt', 'a'.repeat(40_000))`
+    const { messages } = launch(process.execPath, ['-e', fixture], 10, cwd)
+    const exit = await waitFor(() => messages.find((message) => message.type === 'exit'))
+    expect(exit.git).toEqual({ status: 'unavailable', reason: 'Git evidence exceeded the capture limit.' })
+  })
+
   it('streams valid JSON only, sends stdin, and flushes a final line without a newline', async () => {
     const fixture = `let input='';process.stdin.setEncoding('utf8');process.stdin.on('data',c=>input+=c);process.stdin.on('end',()=>{console.error('private diagnostic');console.log('not JSON');console.log(JSON.stringify({type:'fixture',received:input}));process.stdout.write(JSON.stringify({type:'result',subtype:'success',is_error:false,result:'fixture result'}))})`
     const { messages } = launch(process.execPath, ['-e', fixture])

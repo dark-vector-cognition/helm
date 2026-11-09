@@ -23,6 +23,7 @@ import type {
   SentinelAlert,
   HiveSpawnRequest,
   HiveSpawnResult,
+  HiveReviewRequest,
   HiveSessionInfo,
   VaultHealthStatus,
   VaultSearchResponse,
@@ -248,7 +249,8 @@ const api = {
 
   hiveRetry: (sessionId: string): Promise<HiveSpawnResult> => ipcRenderer.invoke(IPC_CHANNELS.HIVE_RETRY, sessionId),
 
-  hiveReview: (sessionId: string): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke(IPC_CHANNELS.HIVE_REVIEW, sessionId),
+  hiveReview: (sessionId: string, decision?: HiveReviewRequest): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.HIVE_REVIEW, sessionId, decision),
 
   hiveSpawn: (request: HiveSpawnRequest): Promise<HiveSpawnResult> =>
     ipcRenderer.invoke(IPC_CHANNELS.HIVE_SPAWN, request),

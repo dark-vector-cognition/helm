@@ -1,7 +1,9 @@
 import { spawn, type ChildProcess } from 'child_process'
+import { captureGitChanges, sampleGitBase } from './git-evidence'
 
 // The IPC connection owns the agent lifetime, including an unexpected Helm exit.
 let child: ChildProcess | undefined
+let starting = false
 let stopped = false
 let reason = 'Stopped by operator'
 let timeout: ReturnType<typeof setTimeout> | undefined
@@ -16,9 +18,10 @@ function stop(message: string): void {
   if (stopped) return
   stopped = true
   reason = message
-  signalTree('SIGTERM')
-  escalation = setTimeout(() => signalTree('SIGKILL'), 2000)
-  if (!child) process.exit(0)
+  if (child) {
+    signalTree('SIGTERM')
+    escalation = setTimeout(() => signalTree('SIGKILL'), 2000)
+  }
 }
 
 function send(message: unknown): void {
@@ -26,13 +29,20 @@ function send(message: unknown): void {
 }
 
 process.on('disconnect', () => stop('Helm disconnected'))
-process.on('message', (message) => {
+process.on('message', async (message) => {
   const request = message as { type: string; command: string; args: string[]; cwd: string; input: string; timeoutSeconds: number }
   if (request.type === 'stop') return stop('Stopped by operator')
-  if (request.type !== 'start' || child || stopped) return
+  if (request.type !== 'start' || starting || stopped) return
   if (process.platform === 'win32') {
     send({ type: 'exit', code: 1, error: 'Managed launch currently requires macOS or Linux process groups.' })
     process.exit(1)
+  }
+  starting = true
+  const base = await sampleGitBase(request.cwd)
+  if (stopped) {
+    send({ type: 'exit', code: null, stopped, error: reason })
+    if (process.connected) process.disconnect()
+    return
   }
   child = spawn(request.command, request.args, {
     cwd: request.cwd, detached: true, shell: false, stdio: ['pipe', 'pipe', 'pipe']
@@ -58,7 +68,7 @@ process.on('message', (message) => {
   // Do not persist diagnostics that can include provider credentials or local context.
   child.stderr?.resume()
   child.once('error', () => send({ type: 'error', error: 'Provider could not start. Check its executable and sign-in.' }))
-  child.once('close', (code) => {
+  child.once('close', async (code) => {
     clearTimeout(timeout)
     clearTimeout(escalation)
     if (pending.trim()) {
@@ -66,7 +76,9 @@ process.on('message', (message) => {
     }
     // A provider can leave descendants after its own process exits.
     signalTree('SIGKILL')
-    send({ type: 'exit', code, stopped, error: stopped ? reason : undefined })
+    child = undefined
+    const git = await captureGitChanges(request.cwd, base)
+    send({ type: 'exit', code, stopped, error: stopped ? reason : undefined, git })
     if (process.connected) process.disconnect()
     process.exitCode = 0
   })

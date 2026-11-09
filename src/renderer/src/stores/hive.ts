@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { HiveSessionInfo, HiveSpawnRequest, HiveSpawnResult } from '../../../shared/types'
+import type { HiveReviewRequest, HiveSessionInfo, HiveSpawnRequest, HiveSpawnResult } from '../../../shared/types'
 
 interface HiveStore {
   sessions: HiveSessionInfo[]
@@ -11,11 +11,11 @@ interface HiveStore {
   refresh: () => Promise<void>
   spawn: (request: HiveSpawnRequest) => Promise<HiveSpawnResult>
   retry: (sessionId: string) => Promise<HiveSpawnResult>
-  review: (sessionId: string) => Promise<void>
-  killSession: (sessionId: string) => Promise<void>
+  review: (sessionId: string, decision?: HiveReviewRequest) => Promise<boolean>
+  killSession: (sessionId: string) => Promise<boolean>
   sendMessage: (sessionId: string, message: string) => Promise<{ success: boolean; error?: string }>
-  attach: (sessionId: string) => Promise<void>
-  updateContext: (objective: string) => Promise<void>
+  attach: (sessionId: string) => Promise<boolean>
+  updateContext: (objective: string) => Promise<boolean>
   getContext: () => Promise<string>
 }
 
@@ -42,14 +42,16 @@ export const useHiveStore = create<HiveStore>((set, get) => {
 
   async function control(
     action: () => Promise<{ success: boolean; error?: string }>
-  ): Promise<void> {
+  ): Promise<boolean> {
     set({ error: null })
     try {
       const result = await action()
       if (!result.success) set({ error: result.error ?? 'Session action failed' })
       await get().refresh()
+      return result.success
     } catch (err) {
       set({ error: `Session action error: ${err}` })
+      return false
     }
   }
 
@@ -97,7 +99,9 @@ export const useHiveStore = create<HiveStore>((set, get) => {
     },
     spawn: (request) => launch(() => window.helm.hiveSpawn(request)),
     retry: (sessionId) => launch(() => window.helm.hiveRetry(sessionId)),
-    review: (sessionId) => control(() => window.helm.hiveReview(sessionId)),
+    review: (sessionId, decision) => control(() => decision
+      ? window.helm.hiveReview(sessionId, decision)
+      : window.helm.hiveReview(sessionId)),
     killSession: (sessionId) => control(() => window.helm.hiveKillSession(sessionId)),
     sendMessage: (sessionId, message) => window.helm.hiveSendMessage(sessionId, message),
     attach: (sessionId) => control(() => window.helm.hiveAttach(sessionId)),

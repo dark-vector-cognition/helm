@@ -77,6 +77,31 @@ export type HiveProvider = 'claude-code' | 'cursor' | 'codex'
 export type HivePermissionMode = 'read-only' | 'workspace-write'
 export type HiveTaskState = 'starting' | 'working' | 'stopping' | 'needs-review' | 'reviewed' | 'failed' | 'stopped' | 'interrupted'
 
+export interface HiveCommandEvidence {
+  command: string
+  exitCode: number | null
+  isTest: boolean
+}
+
+export interface HiveReviewEvidence {
+  id: string
+  git:
+    | { status: 'captured'; baseCommit: string; patch: string; untracked: string[] }
+    | { status: 'unavailable'; reason: string }
+  commandCapture: 'captured' | 'partial' | 'unavailable'
+  commands: HiveCommandEvidence[]
+}
+
+export interface HiveReviewRequest {
+  evidenceId: string
+  outcome: 'accepted' | 'follow-up-requested'
+  reason?: string
+}
+
+export interface HiveReviewDecision extends HiveReviewRequest {
+  at: number
+}
+
 export interface HiveRoleTemplate {
   name: HiveRoleName
   displayName: string
@@ -107,6 +132,8 @@ export interface HiveSessionInfo {
   parentSessionId?: string
   timeoutSeconds?: number
   events?: { at: number; state: HiveTaskState; message: string }[]
+  evidence?: HiveReviewEvidence
+  decision?: HiveReviewDecision
 }
 
 
