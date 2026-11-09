@@ -1,3 +1,4 @@
+import Ajv2020 from 'ajv2020/dist/2020'
 import { describe, expect, it } from 'vitest'
 import { readFileSync, readdirSync } from 'fs'
 import { join } from 'path'
@@ -22,12 +23,16 @@ const EXAMPLES = join(DOCS, 'examples')
 const load = (...p: string[]): Record<string, unknown> =>
   JSON.parse(readFileSync(join(...p), 'utf-8')) as Record<string, unknown>
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T
+const ajv = new Ajv2020()
+const validateOrbSchema = ajv.compile(load(DOCS, 'schema', 'orb.schema.json'))
+const validateGateSchema = ajv.compile(load(DOCS, 'schema', 'gate.schema.json'))
 
 describe('Orb examples', () => {
   for (const dir of readdirSync(EXAMPLES)) {
-    it(`${dir}/orb.json is valid`, () => {
-      const res = validateOrb(load(EXAMPLES, dir, 'orb.json'))
-      expect(res.errors).toEqual([])
+    it(`${dir}/orb.json passes schema and runtime validation`, () => {
+      const orb = load(EXAMPLES, dir, 'orb.json')
+      expect(validateOrbSchema(orb), JSON.stringify(validateOrbSchema.errors)).toBe(true)
+      expect(validateOrb(orb).errors).toEqual([])
     })
   }
 
@@ -36,6 +41,10 @@ describe('Orb examples', () => {
     const orb = load(dir, 'orb.json') as unknown as OrbManifest
     for (const g of orb.graph?.gates ?? []) {
       const gate = load(dir, g.path)
+      expect(
+        validateGateSchema(gate),
+        `${g.path}: ${JSON.stringify(validateGateSchema.errors)}`
+      ).toBe(true)
       expect(validateGate(gate).errors).toEqual([])
       expect(gate.name).toBe(g.id)
     }
@@ -85,6 +94,7 @@ describe('validateGate rejects', () => {
   it('retry with no maxRetries', () => {
     const m = clone(gate)
     delete m.maxRetries
+    expect(validateGateSchema(m)).toBe(false)
     expect(validateGate(m).errors).toContain('onFail "retry" requires maxRetries >= 1')
   })
 
@@ -211,11 +221,7 @@ describe('access rejects unknown keys (CodeRabbit, PR #68)', () => {
   it('rejects a misspelled localOnly instead of failing open', () => {
     const bad = clone(skill) as any
     bad.access = { approval: 'none', localonly: true }
+    expect(validateOrbSchema(bad)).toBe(false)
     expect(validateOrb(bad).errors).toContain('access.localonly is not a known field')
-  })
-
-  it('orb.schema.json closes the access object', () => {
-    const orbSchema = load(DOCS, 'schema', 'orb.schema.json') as any
-    expect(orbSchema.properties.access.additionalProperties).toBe(false)
   })
 })
