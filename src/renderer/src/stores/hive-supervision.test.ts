@@ -97,7 +97,8 @@ describe('managed agent launcher', () => {
   })
   it('requires explicit enablement and objective approval, with no silent global enable', () => {
     const html = render()
-    expect(html).toContain('Agent launch is disabled')
+    expect(html).toContain('Agent launch status is unavailable. Select Refresh to try again.')
+    expect(html).not.toContain('HELM_HIVE_ENABLED')
     expect(html).toContain('Claude Code')
     expect(html).toContain('Cursor')
     expect(html).toContain('Codex')

@@ -129,12 +129,16 @@ vi.mock('./radio-relay', () => ({ getRadioRelayUrl: vi.fn(), stopRadioRelayServe
 vi.mock('./skills', () => ({ getSkillFeed: vi.fn() }))
 vi.mock('./vault-client', () => ({ VaultClient: class {} }))
 
+const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
+
 afterEach(() => {
+  Object.defineProperty(process, 'platform', originalPlatform)
   mocks.appEvents.get('before-quit')?.()
   vi.useRealTimers()
 })
 
 it('cleans up window services before reopening and respects the HIVE enable switch', async () => {
+  Object.defineProperty(process, 'platform', { value: 'darwin' })
   vi.useFakeTimers()
   await import('./index')
   expect(mocks.windows).toHaveLength(1)
@@ -146,7 +150,7 @@ it('cleans up window services before reopening and respects the HIVE enable swit
   expect(mocks.spawn).not.toHaveBeenCalled()
   expect(mocks.handlers.get(IPC_CHANNELS.HIVE_LAUNCH_STATE)!()).toEqual({
     enabled: false,
-    reason: 'Agent launch is disabled in this installation. Set HELM_HIVE_ENABLED=1 to enable it. Monitoring remains available.'
+    reason: 'Agent launch is disabled. Set hive.enabled to true in ~/.config/helm/config.json. If the launch environment overrides this setting, set HELM_HIVE_ENABLED=1 there. Quit and reopen HELM. Monitoring remains available.'
   })
 
   mocks.windows[0].events.get('closed')!()
@@ -171,14 +175,12 @@ it('cleans up window services before reopening and respects the HIVE enable swit
   expect(mocks.windows[1].webContents.send).toHaveBeenCalledWith(IPC_CHANNELS.HIVE_SESSION_UPDATE, [])
   expect(mocks.windows[0].webContents.send).not.toHaveBeenCalled()
 
-  const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
   Object.defineProperty(process, 'platform', { value: 'win32' })
-  try {
-    expect(mocks.handlers.get(IPC_CHANNELS.HIVE_LAUNCH_STATE)!()).toEqual({
-      enabled: false,
-      reason: 'Managed agent launch is not available on Windows in this build. Monitoring remains available.'
-    })
-  } finally { Object.defineProperty(process, 'platform', platform) }
+  expect(mocks.handlers.get(IPC_CHANNELS.HIVE_LAUNCH_STATE)!()).toEqual({
+    enabled: false,
+    reason: 'Managed agent launch is not available on Windows in this build. Monitoring remains available.'
+  })
+  Object.defineProperty(process, 'platform', { value: 'darwin' })
 
   mocks.windows[1].events.get('closed')!()
   expect(vi.getTimerCount()).toBe(0)
