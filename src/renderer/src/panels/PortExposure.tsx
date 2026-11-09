@@ -116,7 +116,7 @@ export function PortExposurePanel({ sample, forceFallback = false }: PortExposur
 
   const onCanvasKey = (event: KeyboardEvent<HTMLCanvasElement>): void => {
     const scene = sceneRef.current
-    if (!scene) return
+    if (!scene || event.ctrlKey || event.metaKey || event.altKey) return
     const actions: Record<string, () => void> = {
       ArrowLeft: () => scene.rotate(-15),
       ArrowRight: () => scene.rotate(15),
@@ -280,7 +280,12 @@ export function PortExposurePanel({ sample, forceFallback = false }: PortExposur
           <p className="text-gray-600 text-xs">Reach comes from the bind address. Firewall and router settings can still block access.</p>
         </section>
       ) : selectedKey ? (
-        <p className="text-gray-500 text-xs">Port {selectedKey.split('/')[0]} is not listening now.</p>
+        <div className="flex flex-wrap items-center gap-2 text-gray-400 text-xs">
+          <p>Port {selectedKey.split('/')[0]} is not listening now.</p>
+          <button type="button" onClick={() => select(null)} className="underline hover:text-gray-200">
+            Clear selection
+          </button>
+        </div>
       ) : null}
 
       {services.length > 0 && (
