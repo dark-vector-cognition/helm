@@ -12,7 +12,7 @@ Current version: `6.0.0`. Helm Light is free and open source under [Apache-2.0](
 
 [Watch the narrated demo on DVC](https://darkvectorcognition.ai/helm/#demo) · [Download the video (MP4)](https://darkvectorcognition.ai/media/helm/helm-demo.mp4).
 
-The demo and screenshots show a review build based on `5.0.0`, including fixes that have not shipped. Dates in the demo are 2026 roadmap targets, not release promises. See the [roadmap and release status](docs/ROADMAP.md).
+The demo and screenshots show an earlier review build based on `5.0.0`. See the [roadmap and release status](docs/ROADMAP.md) for what is available today.
 
 HELM is free and open source. [Support HELM](https://darkvectorcognition.ai/helm/#support) with an optional contribution.
 
@@ -24,14 +24,23 @@ Need Helm for your team? [Discuss enterprise with DVC](https://darkvectorcogniti
 - **Signal interface.** A graphite shell with clearer navigation and a full-width run workspace. Visuals pause when hidden and respect reduced motion.
 - **Pinned AI model.** Briefings can use one named model from a compatible provider. A briefing to a hosted endpoint sends CPU and memory totals only. Hosted means any endpoint outside this machine and the local network (see [Optional Model](#optional-model)).
 - **Optional support.** A Support HELM link sits beside the team enquiry link. Every feature stays free.
-- **Signed Mac download (pending).** The 6.0.0 macOS DMG is built with Developer ID signing and Apple notarization. It is not published yet. See [Download](#download).
+- **Signed Mac download.** The 6.0.0 macOS DMG is signed with Developer ID and notarized by Apple. See [Download](#download).
 - **Windows executable name.** The Windows app is now `helm-light.exe`, so it does not collide with the Kubernetes `helm` command.
 
-Windows managed launch is not available yet. Monitoring works on Windows. Details are in the [CHANGELOG](CHANGELOG.md).
+See [Platform Support](#platform-support) for Windows and Linux limits.
 
 ## Download
 
-Pending: the 6.0.0 macOS DMG (Apple Silicon) is not published yet. This section will link to the release when it exists and its notarization is verified. Until then, build from source with the [Quick Start](#quick-start-2-minutes).
+HELM 6.0.0 was released on 2026-10-21. Get the signed and notarized macOS DMG (Apple Silicon) from the [v6.0.0 release](https://github.com/dark-vector-cognition/helm/releases/tag/v6.0.0).
+
+1. Download [`helm-6.0.0-arm64.dmg`](https://github.com/dark-vector-cognition/helm/releases/download/v6.0.0/helm-6.0.0-arm64.dmg).
+2. Open the DMG and drag HELM to Applications.
+3. Open HELM from Applications.
+
+SHA-256 of `helm-6.0.0-arm64.dmg`:
+`f08c82bac0e4a4aab044764ee2be8b84b1307cfaf6839680be9b78973a3bd84e`
+
+For a source checkout, see [Quick Start](#quick-start-2-minutes) and [Platform Support](#platform-support).
 
 ## What's new in 5.0
 
@@ -174,7 +183,7 @@ npm test
 ## Platform Support
 
 - **macOS**: primary supported platform
-- **Windows and Linux**: guarded monitor paths. Windows parsers for ports, network, processes, battery, disk, and firewall are covered by unit tests but have not been exercised on real Windows hardware. Some local monitor integrations remain macOS-first
+- **Windows and Linux**: limited monitor support. Windows parsers have unit test coverage. Hardware validation remains a roadmap target. Managed agent launch is unavailable on Windows.
 
 ## License
 

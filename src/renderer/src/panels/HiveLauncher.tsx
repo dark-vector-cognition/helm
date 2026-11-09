@@ -99,8 +99,7 @@ export function HiveLauncher(): JSX.Element {
 
       {!enabled && (
         <p role="status" className="rounded border border-amber-700/40 p-2 text-xs text-amber-300">
-          {disabledReason ??
-            'Agent launch is disabled in this installation. Monitoring remains available.'}
+          {disabledReason ?? 'Agent launch status is unavailable. Select Refresh to try again.'}
         </p>
       )}
       {error && (

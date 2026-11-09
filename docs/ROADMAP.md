@@ -1,6 +1,10 @@
 # HELM roadmap
 
-Updated October 18, 2026. The dates below are roadmap targets, not release promises. Publication of this roadmap does not release a milestone.
+Updated November 8, 2026. The dates below are roadmap targets, not release promises. Publication of this roadmap does not release a milestone.
+
+## Released: 6.0.0
+
+Version `6.0.0` was released on October 21, 2026. It adds supervised agent runs, the Signal interface and a signed and notarized macOS DMG for Apple Silicon. See the [v6.0.0 release](https://github.com/dark-vector-cognition/helm/releases/tag/v6.0.0) and the [release notes](releases/v6.0.0.md). The reliability fixes originally targeted for October 30 shipped in this release.
 
 ## Released: 5.0.0
 
@@ -10,13 +14,12 @@ macOS is the primary supported platform. Windows and Linux have guarded monitor 
 
 ## Review build
 
-The [demo in the README](../README.md#see-helm-in-use) is based on `5.0.0` and includes unshipped fixes. A working review build does not establish a released update.
+The [demo in the README](../README.md#see-helm-in-use) shows an earlier review build based on `5.0.0`.
 
 ## Targets for 2026
 
 | Target | Addition or improvement | Evidence required before release |
 | --- | --- | --- |
-| October 30, 2026 | Reliability update: safe radio relay requests, dependable Stop behavior, clean window reopen, current CPU sampling, disabled agent-launch enforcement and truthful navigation indicators. | Regression tests, a successful build, independent review, owner merge and a verified release. |
 | November 20, 2026 | Guided first-run setup and clearer optional model connection diagnostics. | A setup recording from a fresh profile, configuration persistence, useful error states and a successful retry. |
 | December 18, 2026 | Agent session export and a documented Windows and Linux test pass. | Export and reopen a real session. Run supported workflows on actual Windows and Linux hosts. Unit tests alone do not establish hardware support. |
 

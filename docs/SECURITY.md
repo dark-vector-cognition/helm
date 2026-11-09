@@ -4,7 +4,7 @@
 
 **Date:** 2026-03-06
 **Scope:** Source code, dependencies, Electron configuration
-**Auditor:** Claude Code (automated static analysis)
+**Auditor:** Automated static analysis
 
 ---
 
