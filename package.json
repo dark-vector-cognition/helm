@@ -37,7 +37,9 @@
     "test": "vitest run",
     "pretest:watch": "npm run rebuild:node 2>/dev/null || true",
     "test:watch": "vitest",
-    "test:agent-hooks": "node --test scripts/cursor-agent-hook.test.mjs"
+    "test:agent-hooks": "node --test scripts/cursor-agent-hook.test.mjs",
+    "stage:ports": "vite --config vite.stage.config.ts",
+    "stage:ports:preview": "vite build --config vite.stage.config.ts && vite preview --config vite.stage.config.ts"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.0",
@@ -47,6 +49,7 @@
     "better-sqlite3": "^12.11.1",
     "d3-geo": "^3.1.1",
     "dotenv": "^17.3.1",
+    "playcanvas": "^2.23.3",
     "react-resizable-panels": "^4.7.1",
     "tailwindcss": "^4.1.18",
     "topojson-client": "^3.1.0",

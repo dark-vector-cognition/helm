@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useState, type ReactNode } from 'react'
 import { useSystemStore } from './stores/system'
 import { useNavigationStore, type HelmPageId } from './stores/navigation'
 import { AgentsPanel } from './panels/Agents'
-import { PortsPanel } from './panels/Ports'
+import { PortExposurePanel } from './panels/PortExposure'
 import { GitStatusPanel } from './panels/GitStatus'
 import { LogsPanel } from './panels/Logs'
 import { BriefingPanel } from './panels/Briefing'
@@ -468,7 +468,7 @@ function GridPage(): JSX.Element {
         <NetworkPanel />
       </DashPanel>
       <DashPanel title="Listening Ports" className="min-h-[280px]">
-        <PortsPanel />
+        <PortExposurePanel />
       </DashPanel>
     </div>
   )
