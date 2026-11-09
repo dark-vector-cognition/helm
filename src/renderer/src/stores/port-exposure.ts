@@ -44,12 +44,15 @@ export const REACH_DETAIL: Record<BindReach, string> = {
 }
 
 const REACH_RANK: Record<BindReach, number> = { local: 0, interface: 1, all: 2 }
+const WILDCARD_BINDS = new Set(['*', '0.0.0.0', '::', '*.*', ''])
+
+function normalizeBindAddress(address: string): string {
+  return address.trim().toLowerCase().replace(/^\[|\]$/g, '')
+}
 
 export function classifyBindAddress(address: string): BindReach {
-  const value = address.trim().toLowerCase().replace(/^\[|\]$/g, '').replace(/%.*$/, '')
-  if (value === '*' || value === '0.0.0.0' || value === '::' || value === '*.*' || value === '') {
-    return 'all'
-  }
+  const value = normalizeBindAddress(address).replace(/%.*$/, '')
+  if (WILDCARD_BINDS.has(value)) return 'all'
   if (value === 'localhost' || value === '::1' || value.startsWith('127.')) return 'local'
   if (value.startsWith('::ffff:127.')) return 'local'
   return 'interface'
@@ -58,12 +61,13 @@ export function classifyBindAddress(address: string): BindReach {
 export function matchFirewall(processName: string, rules: FirewallRule[] = []): FirewallMatch {
   const name = processName.toLowerCase()
   if (!name) return 'unknown'
+  let match: FirewallMatch = 'unknown'
   for (const rule of rules) {
-    const ruleName = rule.name.toLowerCase()
-    if (!ruleName) continue
-    if (name.includes(ruleName) || ruleName.includes(name)) return rule.action
+    if (rule.name.toLowerCase() !== name) continue
+    if (match !== 'unknown' && match !== rule.action) return 'unknown'
+    match = rule.action
   }
-  return 'unknown'
+  return match
 }
 
 function emptyScopes(): Record<NetworkScope, number> {
@@ -82,8 +86,8 @@ export function buildExposedServices(
   firewallRules: FirewallRule[] = []
 ): ExposedService[] {
   const services = new Map<string, ExposedService>()
-  for (const entry of ports) {
-    if (entry.state !== 'LISTEN') continue
+  const listeners = ports.filter((entry) => entry.state === 'LISTEN')
+  for (const entry of listeners) {
     const key = serviceKey(entry.port, entry.process)
     const reach = classifyBindAddress(entry.address)
     const existing = services.get(key)
@@ -107,11 +111,16 @@ export function buildExposedServices(
 
   for (const connection of connections) {
     if (connection.localPort === null) continue
-    for (const service of services.values()) {
-      if (service.port === connection.localPort && service.pids.includes(connection.pid)) {
-        service.connections[connection.scope] += 1
-      }
-    }
+    const protocol = connection.protocol.toUpperCase().replace(/[46]$/, '')
+    const address = normalizeBindAddress(connection.localAddress)
+    const listener = listeners.find((entry) => {
+      if (entry.port !== connection.localPort || entry.pid !== connection.pid || entry.protocol !== protocol) return false
+      const bind = normalizeBindAddress(entry.address)
+      return bind === address || WILDCARD_BINDS.has(bind)
+    })
+    if (!listener) continue
+    const service = services.get(serviceKey(listener.port, listener.process))
+    if (service) service.connections[connection.scope] += 1
   }
 
   return [...services.values()].sort(

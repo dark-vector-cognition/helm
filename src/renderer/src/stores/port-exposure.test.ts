@@ -86,18 +86,38 @@ describe('buildExposedServices', () => {
     expect(services[0].connections).toEqual({ loopback: 1, lan: 1, internet: 0, unknown: 0 })
     expect(connectionTotal(services[0])).toBe(2)
   })
+
+  it('matches the listener protocol and bind address and counts each socket once', () => {
+    const socket = { ...conn(5353, 42, 'lan'), localAddress: '192.168.1.20', protocol: 'tcp4' }
+    const service = buildExposedServices(
+      [
+        listen(5353, 'node', '192.168.1.20', 42),
+        listen(5353, 'node', '[::1]', 42),
+        listen(5353, 'node', '192.168.1.20', 42)
+      ],
+      [
+        socket,
+        { ...socket, protocol: 'udp4' },
+        { ...socket, localAddress: '192.168.1.21' },
+        { ...socket, protocol: 'tcp6', localAddress: '::1', scope: 'loopback' }
+      ]
+    )[0]
+    expect(service.connections).toEqual({ loopback: 1, lan: 1, internet: 0, unknown: 0 })
+  })
 })
 
 describe('matchFirewall', () => {
-  it('matches rule names in either direction and defaults to unknown', () => {
+  it('uses exact name matches and leaves conflicting matches unknown', () => {
     const rules = [
       { path: '/x', name: 'ollama', action: 'allow' as const, type: 'user' as const },
       { path: '/y', name: 'sshd-keygen-wrapper', action: 'block' as const, type: 'system' as const }
     ]
     expect(matchFirewall('ollama', rules)).toBe('allow')
-    expect(matchFirewall('sshd', rules)).toBe('block')
+    expect(matchFirewall('sshd-keygen-wrapper', rules)).toBe('block')
+    expect(matchFirewall('sshd', rules)).toBe('unknown')
     expect(matchFirewall('node', rules)).toBe('unknown')
     expect(matchFirewall('', rules)).toBe('unknown')
+    expect(matchFirewall('ollama', [...rules, { ...rules[1], name: 'Ollama' }])).toBe('unknown')
   })
 })
 

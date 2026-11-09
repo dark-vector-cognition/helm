@@ -12,7 +12,7 @@ import {
 } from '../stores/port-exposure'
 import { useSystemStore } from '../stores/system'
 
-const FIREWALL_LABEL = { allow: 'Allow rule', block: 'Block rule', unknown: 'No matching rule' }
+const FIREWALL_LABEL = { allow: 'Allow rule', block: 'Block rule', unknown: 'No clear match' }
 
 interface PortExposurePanelProps {
   // Review harness only: a fixed snapshot instead of live monitor data.
@@ -274,7 +274,7 @@ export function PortExposurePanel({ sample, forceFallback = false }: PortExposur
                   ? 'None observed'
                   : `${selected.connections.loopback} loopback, ${selected.connections.lan} LAN, ${selected.connections.internet} internet${selected.connections.unknown ? `, ${selected.connections.unknown} unknown` : ''}`}
             </dd>
-            <dt className="text-gray-500">Firewall</dt>
+            <dt className="text-gray-500">Firewall name match</dt>
             <dd className="text-gray-300">{FIREWALL_LABEL[selected.firewall]}</dd>
           </dl>
           <p className="text-gray-600 text-xs">Reach comes from the bind address. Firewall and router settings can still block access.</p>
