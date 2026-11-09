@@ -11,7 +11,7 @@ HELM V6: supervised agent runs, the Signal interface and a signed Mac download. 
 - Distinct stages for acceptance, work, returned result and operator review. A process start does not count as acceptance
 - Stop waits for the provider to exit. Retry keeps the earlier record
 - Private run journals recover after a restart. Closing the window keeps managed work in the tray; quitting stops it
-- Windows managed launch is unavailable. Windows monitoring remains available
+- Windows managed launch is unavailable. See [Platform Support](README.md#platform-support) for monitor limits
 
 ### Signal Interface
 - Graphite shell, restrained lime accent, clearer navigation and a full-width run workspace
