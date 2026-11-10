@@ -4,6 +4,7 @@ export type HelmPageId =
   | 'bridge'
   | 'fleet'
   | 'swarm'
+  | 'connectors'
   | 'grid'
   | 'ai'
   | 'vault'

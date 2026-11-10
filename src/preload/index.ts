@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC_CHANNELS } from '../shared/types'
+import type { ConnectorHealthSnapshot } from '../shared/connector-health'
 import type {
   SystemState,
   LogLine,
@@ -34,6 +35,8 @@ import type {
 } from '../shared/types'
 
 const api = {
+  getConnectorHealth: (): Promise<ConnectorHealthSnapshot> => ipcRenderer.invoke(IPC_CHANNELS.CONNECTOR_HEALTH),
+
   getInitialState: (): Promise<SystemState> => ipcRenderer.invoke(IPC_CHANNELS.GET_INITIAL_STATE),
 
   onSystemStateUpdate: (callback: (state: SystemState) => void): (() => void) => {
