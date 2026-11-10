@@ -15,6 +15,7 @@ const HOUR = 60 * 60 * 1000
 const WINDOW = CONNECTOR_WINDOW_HOURS * HOUR
 const FRESH = CONNECTOR_FRESH_MINUTES * 60 * 1000
 const PENDING_GRACE = 30_000
+const ATTRIBUTED_PENDING_LIMIT = 10 * 60_000
 const MAX_DIRECTORY_ENTRIES = 100_000
 const METADATA_BATCH = 64
 const MAX_SESSIONS = 1024
@@ -370,11 +371,13 @@ function addSession(
       ? findAgent?.(session.serverPid, session.startedAt)
       : undefined
   let inFlight = false
+  // A live agent can outlast a canceled request.
+  const pendingLimit = agent ? ATTRIBUTED_PENDING_LIMIT : PENDING_GRACE
 
   for (const call of observed) {
     row.lastAttemptAt = Math.max(row.lastAttemptAt ?? call.at, call.at)
     const result = call.result && call.result.at <= now ? call.result : undefined
-    if (!result && !closed && (agent || now - call.at <= PENDING_GRACE)) {
+    if (!result && !closed && now - call.at <= pendingLimit) {
       row.inFlight += 1
       inFlight = true
       continue

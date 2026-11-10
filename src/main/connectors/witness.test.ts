@@ -235,6 +235,36 @@ describe('Witness connector health', () => {
     expect(later.rows.every((row) => row.inFlight === 0 && row.unanswered === 1)).toBe(true)
   })
 
+  it('expires an attributed pending call and replaces the estimate when its reply arrives', async () => {
+    const findAgent = () => ({ name: 'Codex', pid: 342 })
+    await put(journal(SESSION, [start(), call(1)]))
+    const before = await readConnectorHealth(directory, NOW + 590_000, findAgent)
+    expect(before.rows[0]).toMatchObject({ inFlight: 1, unanswered: 0 })
+
+    const after = await readConnectorHealth(directory, NOW + 592_000, findAgent)
+    expect(after.rows[0]).toMatchObject({
+      inFlight: 0,
+      unanswered: 1,
+      score: 0,
+      agents: [{ pid: 342, inFlight: false }],
+      failures: [{ callSequence: 1, outcome: 'unanswered' }]
+    })
+    expect(after.rows[0].failures[0].resultSequence).toBeUndefined()
+
+    const replyAt = NOW + 593_000
+    await put(
+      journal(SESSION, [start(), call(1), { ...result(1, 1), ts: new Date(replyAt).toISOString() }])
+    )
+    const replied = await readConnectorHealth(directory, replyAt, findAgent)
+    expect(replied.rows[0]).toMatchObject({
+      inFlight: 0,
+      unanswered: 0,
+      successful: 1,
+      score: 100,
+      failures: []
+    })
+  })
+
   it('keeps stale observations unknown and omits non-MCP wrapper inventory', async () => {
     await put(journal(SESSION, [start(), call(1), result(1, 1), end(1)], NOW - 3_700_000))
     const idle = 's_01234568'
