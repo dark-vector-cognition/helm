@@ -432,6 +432,7 @@ export interface GroupActionResult {
 }
 
 export const IPC_CHANNELS = {
+  CONNECTOR_HEALTH: 'connector:health',
   SYSTEM_STATE_UPDATE: 'system:state-update',
   REQUEST_REFRESH: 'system:request-refresh',
   GET_INITIAL_STATE: 'system:get-initial-state',

@@ -1,4 +1,4 @@
-import { join, basename } from 'path'
+import { join, basename, isAbsolute } from 'path'
 import { homedir } from 'node:os'
 import { pathToFileURL } from 'node:url'
 import { loadEnvironment } from './app-paths'
@@ -38,6 +38,9 @@ import { getRadioRelayUrl, stopRadioRelayServer } from './radio-relay'
 import { getSkillFeed } from './skills'
 import { setupHiveIPC, teardownHive, shutdownHive, resolveHiveConfig } from './hive/index'
 import { VaultClient } from './vault-client'
+import { readConnectorHealth } from './connectors/witness'
+import { sampleConnectorAgents } from './connectors/agents'
+import type { ConnectorHealthSnapshot } from '../shared/connector-health'
 import type { HelmConfig, SystemState, AgentRegistryEntry } from '../shared/types'
 
 let mainWindow: BrowserWindow | null = null
@@ -230,6 +233,20 @@ app.whenReady().then(() => {
 
   // Initialize SQLite database
   getDb()
+
+  let connectorScan: Promise<ConnectorHealthSnapshot> | undefined
+  ipcMain.handle(IPC_CHANNELS.CONNECTOR_HEALTH, (event) => {
+    if (!mainWindow || event.sender !== mainWindow.webContents || event.senderFrame !== mainWindow.webContents.mainFrame) return
+    connectorScan ??= (async () => {
+      const state = getLatestState()
+      const agents = state && Date.now() - state.timestamp < 15_000 ? state.agents : []
+      const witnessHome = process.env.WITNESS_HOME
+      const directory = join(witnessHome && isAbsolute(witnessHome) ? witnessHome : join(homedir(), '.witness'), 'log')
+      const matchAgent = await sampleConnectorAgents(agents)
+      return readConnectorHealth(directory, Date.now(), matchAgent)
+    })().finally(() => { connectorScan = undefined })
+    return connectorScan
+  })
 
   // DB query IPC handlers
   ipcMain.handle(IPC_CHANNELS.DB_QUERY_SNAPSHOTS, (_event, limit: number) =>

@@ -18,6 +18,7 @@ import { FMRadioPanel } from './panels/FMRadio'
 import { RegistryPanel } from './panels/Registry'
 import { VaultPagePanel } from './panels/VaultPage'
 import { HiveLauncher } from './panels/HiveLauncher'
+import { ConnectorHealthPanel } from './panels/ConnectorHealth'
 import { HELM_SKINS, useSkinStore } from './stores/skin'
 import { usePrivacyStore } from './stores/privacy'
 import { SkinGlobe } from './components/SkinGlobe'
@@ -50,6 +51,12 @@ const PAGES: PageMeta[] = [
     label: 'Agent runs',
     kicker: 'Intent. Action. Evidence.',
     description: 'Define the task. Bound its permissions. Inspect the result.'
+  },
+  {
+    id: 'connectors',
+    label: 'Connectors',
+    kicker: 'MCP activity',
+    description: 'See which MCP calls settled, the local processes linked to them, and where a failure was recorded.'
   },
   {
     id: 'grid',
@@ -93,6 +100,7 @@ const PAGE_ICONS: Record<HelmPageId, string> = {
   bridge: 'M3 3h5v5H3zM12 3h5v5h-5zM3 12h5v5H3zM12 12h5v5h-5z',
   fleet: 'M2 6h6l2 2h8v9H2zM2 6V3h6l2 3',
   swarm: 'M5 3l12 7-12 7V3z',
+  connectors: 'M7 3v4m6-4v4M5 7h10v3a5 5 0 0 1-10 0V7zm5 8v3',
   grid: 'M2 11h3l3-7 4 12 3-7h3',
   ai: 'M10 2v4M10 14v4M2 10h4M14 10h4M5 5l2 2M13 13l2 2M5 15l2-2M13 7l2-2M7 7h6v6H7z',
   vault: 'M4 3h12v14H4zM7 7h6M7 10h6M7 13h4',
@@ -382,7 +390,7 @@ function PageHeader({ meta }: { meta: PageMeta }): JSX.Element {
         </h2>
         <p className="pt-1 text-sm shell-subtle max-w-[56rem]">{meta.description}</p>
       </div>
-      {meta.id !== 'swarm' && (
+      {meta.id !== 'swarm' && meta.id !== 'connectors' && (
         <button
           type="button"
           className="shell-primary-button"
@@ -568,6 +576,7 @@ function NavBadge({
     case 'ai':
     case 'vault':
     case 'logs':
+    case 'connectors':
       return null
     case 'registry':
       return null
@@ -676,6 +685,12 @@ function PageContent({ currentPage }: { currentPage: HelmPageId }): JSX.Element 
       return <FleetPage />
     case 'swarm':
       return <SwarmPage />
+    case 'connectors':
+      return (
+        <DashPanel title="Observed connector calls">
+          <ConnectorHealthPanel />
+        </DashPanel>
+      )
     case 'grid':
       return <GridPage />
     case 'ai':
@@ -772,9 +787,11 @@ function App(): JSX.Element {
           <main className="shell-main flex-1 min-h-0 overflow-hidden flex flex-col">
             <div className="shell-page-scroll flex-1 min-h-0 overflow-y-auto" key={currentPage}>
               <PageHeader meta={activePageMeta} />
-              <div className="shell-metrics">
-                <ScorecardsStrip />
-              </div>
+              {currentPage !== 'connectors' && (
+                <div className="shell-metrics">
+                  <ScorecardsStrip />
+                </div>
+              )}
               {(currentPage === 'bridge' || currentPage === 'fleet') && <SessionDeltaBanner />}
               <div className="shell-page-content">
                 <PageContent currentPage={currentPage} />

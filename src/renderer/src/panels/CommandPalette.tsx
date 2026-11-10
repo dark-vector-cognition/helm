@@ -36,6 +36,12 @@ const PAGE_COMMANDS: {
     description: 'Jump to live agent drill-down and swarm history'
   },
   {
+    page: 'connectors',
+    label: 'Open Connectors',
+    aliases: ['mcp', 'connectors', 'tool calls', 'traceback'],
+    description: 'Inspect observed connector calls and trace failures'
+  },
+  {
     page: 'grid',
     label: 'Open Grid',
     aliases: ['grid', 'network', 'ports', 'traffic', 'systems', 'surface'],
